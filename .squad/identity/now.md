@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-10-03T09:07:57.428Z
-focus_area: Initial setup
+updated_at: 2026-10-03T23:13:28+02:00
+focus_area: Frontend static site (#3) on squad/3-frontend
 active_issues: []
 ---
 
 # What We're Focused On
 
-Getting started. Updated by coordinator at session start.
+Frontend static site (#3) on squad/3-frontend.
