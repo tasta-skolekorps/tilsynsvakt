@@ -1,5 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.AddAzureContainerAppEnvironment("aca");
+
 var storage = builder.AddAzureStorage("storage")
     .RunAsEmulator(azurite => azurite
         .WithLifetime(ContainerLifetime.Persistent)
