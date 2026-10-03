@@ -62,7 +62,7 @@ Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and We
 ## Architecture
 
 - **Frontend:** static website on **GitHub Pages**. Mobile first – used on a phone in the hallway by the gym hall.
-- **Backend:** .NET minimal API, orchestrated with **Aspire** and deployed to **Azure Container Apps (express)**.
+- **Backend:** .NET minimal API, orchestrated with **Aspire**, using Azure Table Storage via `Azure.Data.Tables` (ACA managed identity; local Azurite), and deployed to standard **Azure Container Apps**.
 - **Trust-based:** no authentication. The guard selects their name (selection, not login), and anyone can sign up for or change any shift.
 
 ## Source of truth
@@ -85,7 +85,7 @@ Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and We
 
 - Persists which shifts each guard signs up for. Stores only date, name and phone per shift.
 - No authentication. Validate input and restrict CORS to the frontend origin.
-- Persistence store: SQLite on a mounted volume, accessed via EF Core.
+- Persistence store: Azure Table Storage via `Azure.Data.Tables`. In Azure Container Apps, use the system-assigned managed identity with a pre-created table; local development uses Aspire's Azurite Tables emulator.
 
 ## Spond sync
 
