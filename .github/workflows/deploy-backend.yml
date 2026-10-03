@@ -1,0 +1,61 @@
+name: Deploy backend
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "aspire.config.json"
+      - "Tilsynsvakt.slnx"
+      - ".github/workflows/deploy-backend.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test Tilsynsvakt.slnx
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AZURE__TENANTID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE__SUBSCRIPTIONID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE__LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE__RESOURCEGROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      Frontend__Origin: ${{ vars.FRONTEND_ORIGIN }}
+      Parameters__adminApiKey: ${{ secrets.ADMIN_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Aspire CLI
+        run: |
+          curl -sSL https://aspire.dev/install.sh | bash
+          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+
+      - name: Deploy
+        run: aspire deploy --non-interactive
