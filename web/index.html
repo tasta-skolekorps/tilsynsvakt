@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f1f3eb">
+  <meta name="description" content="Vaktplan og praktisk informasjon for tilsynsvakter i Tasta skole sin gymsal.">
+  <!-- Static CSP cannot interpolate the deployment-time API host from config.js; API requests are limited to HTTPS, plus local development. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http://localhost:5187 http://127.0.0.1:5187; form-action 'self'; base-uri 'self'; object-src 'none'">
+  <title>Tilsynsvakt · Tasta skolekorps</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Hopp til innhold</a>
+  <header class="site-header">
+    <a class="brand" href="#plan" aria-label="Tilsynsvakt, til dagens plan">
+      <span class="brand-mark" aria-hidden="true">T</span>
+      <span class="brand-name">Tasta skolekorps <small>Tilsynsvakt · gymsalen</small></span>
+    </a>
+    <div class="identity">
+      <label for="guard-select">Jeg er</label>
+      <select id="guard-select" aria-describedby="guard-status">
+        <option value="">Velg navn</option>
+      </select>
+      <span id="guard-status" class="sr-only" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <nav class="main-nav" aria-label="Hovedmeny">
+    <a href="#plan" data-view="plan">I dag</a>
+    <a href="#vaktliste" data-view="vaktliste">Vaktliste</a>
+    <a href="#pamelding" data-view="pamelding">Påmelding</a>
+    <a href="#kontakter" data-view="kontakter">Kontakter</a>
+    <a href="#sjekkliste" data-view="sjekkliste">Sjekkliste</a>
+    <a href="#rapport" data-view="rapport">Rapport</a>
+  </nav>
+
+  <main id="main">
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <section id="view-plan" class="view" aria-labelledby="plan-title">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow" id="today-label">Tasta skole · gymsalen</p>
+          <h1 id="plan-title">Dagens plan</h1>
+        </div>
+        <a class="text-link" href="#sjekkliste">Til sjekklisten <span aria-hidden="true">↗</span></a>
+      </div>
+      <p class="plan-warning" id="plan-warning"></p>
+      <div class="now-panel" aria-live="polite">
+        <span class="now-marker" aria-hidden="true"></span>
+        <div><p class="eyebrow">Nå i gymsalen</p><p id="current-activity" class="now-title">Laster dagens plan …</p><p id="current-time" class="muted"></p></div>
+      </div>
+      <div class="section-heading"><h2>Videre i dag</h2><span class="muted" id="plan-day"></span></div>
+      <ol id="today-schedule" class="schedule-list" aria-label="Aktiviteter i gymsalen i dag"></ol>
+      <div class="handover-strip">
+        <span class="handover-icon" aria-hidden="true">↗</span>
+        <div><p class="eyebrow">Neste permlevering</p><p id="next-handover">Velg navnet ditt for å se neste vakt.</p></div>
+        <a href="#vaktliste" aria-label="Se vaktlisten">Se vaktliste <span aria-hidden="true">→</span></a>
+      </div>
+      <p class="scope-note">Tilsynsvakten gjelder gymsalen, ikke musikkaula. Mandager dekkes av styret.</p>
+    </section>
+
+    <section id="view-vaktliste" class="view" aria-labelledby="roster-title" hidden>
+      <div class="page-heading"><div><p class="eyebrow">Dine vakter og overlevering</p><h1 id="roster-title">Vaktliste</h1></div><button class="icon-button" id="refresh-shifts" type="button" aria-label="Last inn vaktlisten på nytt" title="Oppdater">↻</button></div>
+      <div class="handover-panel"><p class="eyebrow">Neste vakt etter din</p><p id="roster-handover">Velg navnet ditt for å se overleveringen.</p></div>
+      <h2 class="subheading">Mine vakter</h2>
+      <div id="my-shifts" class="shift-list" aria-live="polite"><p class="loading">Laster vaktliste …</p></div>
+      <h2 class="subheading">Alle vakter</h2>
+      <div id="all-shifts" class="shift-list"><p class="loading">Laster vaktliste …</p></div>
+    </section>
+
+    <section id="view-pamelding" class="view" aria-labelledby="signup-title" hidden>
+      <div class="page-heading"><div><p class="eyebrow">Ledige vakter · tirsdag–torsdag</p><h1 id="signup-title">Påmelding</h1></div></div>
+      <p class="intro-copy">Velg en ledig vakt for å melde deg på. Vaktlisten oppdateres fra fellessystemet.</p>
+      <form id="signup-form" class="signup-form">
+        <label for="open-shift-select">Ledig vakt</label>
+        <div class="form-row"><select id="open-shift-select" required><option value="">Laster vakter …</option></select><button class="button button-primary" type="submit">Meld meg på</button></div>
+      </form>
+      <div id="signup-shifts" class="shift-list"><p class="loading">Laster vaktliste …</p></div>
+      <p class="muted small-copy">Du kan melde på eller endre en vakt for valgfri tilsynsvakt. Endringer kontrolleres mot siste lagrede vaktliste.</p>
+    </section>
+
+    <section id="view-kontakter" class="view" aria-labelledby="contacts-title" hidden>
+      <div class="page-heading"><div><p class="eyebrow">Hjelp og praktiske spørsmål</p><h1 id="contacts-title">Kontakter</h1></div></div>
+      <div id="contact-list" class="contact-list"><p class="loading">Laster kontakter …</p></div>
+    </section>
+
+    <section id="view-sjekkliste" class="view" aria-labelledby="checklist-title" hidden>
+      <div class="page-heading"><div><p class="eyebrow">Før, under og etter vakten</p><h1 id="checklist-title">Sjekkliste</h1></div><span id="checklist-progress" class="progress-count">0 / 0</span></div>
+      <p class="intro-copy" id="checklist-date"></p>
+      <div class="progress-track" role="progressbar" aria-label="Fremdrift i sjekklisten" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><span id="progress-fill"></span></div>
+      <div id="checklist-items" class="checklist"><p class="loading">Laster sjekkliste …</p></div>
+      <p class="scope-note">Nøkkel og instruks følger permen. Nøkkelboks er planlagt, men ikke etablert.</p>
+    </section>
+
+    <section id="view-rapport" class="view" aria-labelledby="report-title" hidden>
+      <div class="page-heading"><div><p class="eyebrow">Gymsalen · intern notatmal</p><h1 id="report-title">Hendelsesrapport</h1></div></div>
+      <p class="notice notice-warm">Sending av hendelsesrapporter er ikke avklart ennå. Skjemaet lagrer eller sender ingenting.</p>
+      <form id="incident-form" class="incident-form">
+        <label for="incident-type">Type hendelse</label>
+        <select id="incident-type" required>
+          <option value="">Velg type</option>
+          <option>Skade eller uhell</option>
+          <option>Skade på utstyr eller bygg</option>
+          <option>Avvik fra avtalt bruk</option>
+          <option>Annet</option>
+        </select>
+        <label for="incident-date">Dato</label><input id="incident-date" type="date" required>
+        <label for="incident-notes">Kort beskrivelse</label><textarea id="incident-notes" rows="5" maxlength="2000" placeholder="Skriv bare det som er nødvendig. Ikke oppgi personopplysninger om barn eller medlemmer."></textarea>
+        <button class="button button-secondary" type="submit">Vis rapportutkast</button>
+      </form>
+      <div id="incident-preview" class="incident-preview" aria-live="polite" hidden></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><p>Tasta skolekorps <span aria-hidden="true">·</span> Tilsynsvakt for gymsalen</p><a href="tel:+4792423946">Spørsmål? 924 23 946</a></footer>
+</body>
+</html>
