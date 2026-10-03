@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tilsynsvakt.AppHost/Tilsynsvakt.AppHost.csproj" />
+    <Project Path="src/Tilsynsvakt.ServiceDefaults/Tilsynsvakt.ServiceDefaults.csproj" />
+    <Project Path="src/Tilsynsvakt.Api/Tilsynsvakt.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tilsynsvakt.Api.Tests/Tilsynsvakt.Api.Tests.csproj" />
+  </Folder>
+</Solution>

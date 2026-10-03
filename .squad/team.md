@@ -60,5 +60,5 @@
 
 - **Project:** tilsynsvakt
 - **Owner:** Unavailable (git config user.name could not be read)
-- **Stack:** Mobile-first static frontend on GitHub Pages; .NET minimal API orchestrated with Aspire and deployed to Azure Container Apps (express)
+- **Stack:** Mobile-first static frontend on GitHub Pages; .NET minimal API orchestrated with Aspire and deployed to standard Azure Container Apps; Azure Table Storage via `Azure.Data.Tables` (ACA managed identity, local Azurite)
 - **Created:** 2026-10-03

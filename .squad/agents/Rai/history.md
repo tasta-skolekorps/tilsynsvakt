@@ -14,3 +14,5 @@ Agent Rai initialized and ready for work.
 ## Learnings
 
 Initial setup complete.
+
+📌 Team update (2026-10-03T22:48:50.1676592+02:00): Azure Table Storage is the selected roster persistence for standard ACA; SQLite/Azure Files database assumptions are superseded.
