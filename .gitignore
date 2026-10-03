@@ -8,3 +8,67 @@
 .squad/.cache/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
+
+# .NET build output
+/src/**/bin/
+/tests/**/bin/
+/src/**/obj/
+/tests/**/obj/
+/src/**/[Dd]ebug/
+/tests/**/[Dd]ebug/
+/src/**/[Rr]elease/
+/tests/**/[Rr]elease/
+
+# Visual Studio user state
+/.vs/
+/src/**/.vs/
+/tests/**/.vs/
+/src/**/*.user
+/tests/**/*.user
+/src/**/*.suo
+/tests/**/*.suo
+
+# Test results and coverage
+/src/**/TestResults/
+/tests/**/TestResults/
+/src/**/*.trx
+/tests/**/*.trx
+/src/**/coverage*.xml
+/tests/**/coverage*.xml
+/src/**/*.coverage
+/tests/**/*.coverage
+/src/**/coverage/
+/tests/**/coverage/
+
+# .NET logs
+/src/**/*.log
+/tests/**/*.log
+
+# Publish output
+/src/**/publish/
+/tests/**/publish/
+/src/**/*.pubxml.user
+/tests/**/*.pubxml.user
+
+# NuGet artifacts and local package caches
+/src/**/*.nupkg
+/tests/**/*.nupkg
+/src/**/*.snupkg
+/tests/**/*.snupkg
+/.nuget/packages/
+/src/**/.nuget/packages/
+/tests/**/.nuget/packages/
+
+# Local Azurite emulator state
+__azurite__*
+__azurite_db*
+AzuriteConfig/
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+
+# Local secret and configuration overrides
+/src/**/appsettings.*.local.json
+/tests/**/appsettings.*.local.json
+/src/**/secrets.json
+/tests/**/secrets.json

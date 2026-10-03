@@ -1,0 +1,5 @@
+{
+    "appHost": {
+        "path": "src\\Tilsynsvakt.AppHost\\Tilsynsvakt.AppHost.csproj"
+    }
+}

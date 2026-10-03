@@ -1,7 +1,7 @@
 ---
 name: Squad
 description: "Your AI team. Describe what you're building, get a team of specialists that live in your repo."
-tools: [agent, edit]
+tools: [vscode, execute, read, agent, edit, search, web, browser, todo]
 ---
 
 <!-- SQUAD_COORDINATOR_CANARY_HEAD_b7d2 -->
