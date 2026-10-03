@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using Azure;
 using Azure.Data.Tables;
-using Azure.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Tilsynsvakt.Api;
 
@@ -20,10 +20,16 @@ public sealed class TableStores : IStores, IStoreLifecycle
     private readonly IConfiguration _configuration;
     private readonly Lazy<TableClient> _table;
 
-    public TableStores(IConfiguration configuration)
+    public TableStores(IServiceProvider services, IConfiguration configuration)
     {
         _configuration = configuration;
-        _table = new Lazy<TableClient>(() => CreateTableClient(configuration));
+        var tableName = configuration["Storage:TableName"];
+        if (string.IsNullOrWhiteSpace(tableName))
+        {
+            tableName = "Tilsynsvakt";
+        }
+
+        _table = new Lazy<TableClient>(() => services.GetRequiredService<TableServiceClient>().GetTableClient(tableName));
     }
 
     public async Task InitializeAsync(CancellationToken ct)
@@ -376,41 +382,6 @@ public sealed class TableStores : IStores, IStoreLifecycle
     }
 
     private TableClient Table => _table.Value;
-
-    private static TableClient CreateTableClient(IConfiguration configuration)
-    {
-        var tableName = configuration["Storage:TableName"];
-        if (string.IsNullOrWhiteSpace(tableName))
-        {
-            tableName = "Tilsynsvakt";
-        }
-
-        var connectionString = configuration["TABLES_CONNECTIONSTRING"];
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = configuration["Storage:ConnectionString"];
-        }
-
-        if (!string.IsNullOrWhiteSpace(connectionString))
-        {
-            return new TableServiceClient(connectionString).GetTableClient(tableName);
-        }
-
-        var serviceUri = configuration["TABLES_TABLEENDPOINT"];
-        if (string.IsNullOrWhiteSpace(serviceUri))
-        {
-            serviceUri = configuration["Storage:TableServiceUri"];
-        }
-
-        if (!Uri.TryCreate(serviceUri, UriKind.Absolute, out var endpoint)
-            || (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
-        {
-            throw new InvalidOperationException(
-                "Configure Storage:ConnectionString or Storage:TableServiceUri before using Azure Table Storage.");
-        }
-
-        return new TableServiceClient(endpoint, new DefaultAzureCredential()).GetTableClient(tableName);
-    }
 
     private async Task<List<TableEntity>> ReadGuardsAsync(CancellationToken ct)
     {

@@ -1,6 +1,7 @@
 using Azure;
 using Azure.Data.Tables;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Tilsynsvakt.Api;
 
 namespace Tilsynsvakt.Api.Tests;
@@ -29,12 +30,12 @@ public sealed class TableStoreContractTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Storage:ConnectionString"] = AzuriteConnectionString,
                 ["Storage:TableName"] = tableName,
                 ["Storage:CreateTable"] = "true",
             })
             .Build();
-        var stores = new TableStores(configuration);
+        using var services = CreateTableClientServices();
+        var stores = new TableStores(services, configuration);
 
         try
         {
@@ -113,7 +114,8 @@ public sealed class TableStoreContractTests
 
             var persistenceDate = new DateOnly(2027, 1, 8);
             await stores.SignUpAsync(persistenceDate, replacement.Id, CancellationToken.None);
-            var reopenedStores = new TableStores(configuration);
+            using var reopenedServices = CreateTableClientServices();
+            var reopenedStores = new TableStores(reopenedServices, configuration);
             await reopenedStores.CheckReadyAsync(CancellationToken.None);
             Assert.Equal(20, (await reopenedStores.GetAllGuardsAsync(CancellationToken.None)).Count);
             Assert.Equal(replacement.Id, (await reopenedStores.GetShiftAsync(persistenceDate, CancellationToken.None))?.Guard?.Id);
@@ -138,12 +140,12 @@ public sealed class TableStoreContractTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Storage:ConnectionString"] = AzuriteConnectionString,
                 ["Storage:TableName"] = tableName,
                 ["Storage:CreateTable"] = "true",
             })
             .Build();
-        var stores = new TableStores(configuration);
+        using var services = CreateTableClientServices();
+        var stores = new TableStores(services, configuration);
 
         try
         {
@@ -190,4 +192,8 @@ public sealed class TableStoreContractTests
             return error;
         }
     }
+
+    private static ServiceProvider CreateTableClientServices() => new ServiceCollection()
+        .AddSingleton(new TableServiceClient(AzuriteConnectionString))
+        .BuildServiceProvider();
 }

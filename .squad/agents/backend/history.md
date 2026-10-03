@@ -15,5 +15,7 @@
 - Map Scalar after OpenAPI in all environments; its unmapped reference endpoint has no mutation/admin rate-limit policy.
 - Azure Table mutations must use same-partition entity-group transactions and ETags; inspect the failed transaction action index to distinguish stale shift conflicts from retryable guard updates. This project now uses the approved Table Storage design, but local Table behavior remains unverified when Azurite is unavailable.
 - For bounded Azure Table ETag retries, use capped exponential jitter and return a stable 503 ProblemDetails (`storage_busy`, with `Retry-After`) if the budget is exhausted. Keep true duplicate-name 409s immediate; cancel's one-shot stale-ETag outcome remains `shift_changed`. The opt-in Azurite contracts verified three consecutive passes of the 20-way unique-ID allocation test.
+- Use Aspire's `Aspire.Azure.Data.Tables` integration with a named `tables` connection; keep `TableClient` resolution lazy so test service replacements do not require storage configuration.
+- Headless Aspire starts need an explicit API endpoint when no launch profile exists; set the local API environment to Development so `CreateTable` runs before the readiness check.
 
 📌 Team update (2026-10-03T22:48:50.1676592+02:00): Azure Table Storage is the selected roster persistence; SQLite/Azure Files database assumptions are superseded and SQLite has been removed from the implementation.

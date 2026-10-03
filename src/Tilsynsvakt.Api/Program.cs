@@ -5,6 +5,24 @@ using Tilsynsvakt.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+var tablesConnection = builder.Configuration.GetConnectionString("tables");
+if (string.IsNullOrWhiteSpace(tablesConnection))
+{
+    tablesConnection = new[]
+    {
+        builder.Configuration["TABLES_CONNECTIONSTRING"],
+        builder.Configuration["TABLES_TABLEENDPOINT"],
+        builder.Configuration["Storage:ConnectionString"],
+        builder.Configuration["Storage:TableServiceUri"],
+    }.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    if (tablesConnection is not null)
+    {
+        builder.Configuration["ConnectionStrings:tables"] = tablesConnection;
+    }
+}
+
+builder.AddAzureTableServiceClient("tables", settings => settings.DisableHealthChecks = true);
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(ShiftCalendar.FromConfiguration(builder.Configuration.GetSection("Calendar:Periods")));
