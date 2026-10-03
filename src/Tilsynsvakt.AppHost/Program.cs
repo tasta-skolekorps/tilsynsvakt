@@ -20,4 +20,17 @@ if (!string.IsNullOrWhiteSpace(adminApiKey))
     api.WithEnvironment("Admin__ApiKey", adminApiKey);
 }
 
+if (builder.ExecutionContext.IsPublishMode)
+{
+    // Aspire grants the API's managed identity Table Data Contributor, which is enough to create the table.
+    api.WithEnvironment("Storage__CreateTable", "true")
+       .WithExternalHttpEndpoints();
+
+    var frontendOrigin = builder.Configuration["Frontend:Origin"];
+    if (!string.IsNullOrWhiteSpace(frontendOrigin))
+    {
+        api.WithEnvironment("Frontend__Origin", frontendOrigin);
+    }
+}
+
 builder.Build().Run();
