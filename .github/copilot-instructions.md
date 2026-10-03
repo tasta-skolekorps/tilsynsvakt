@@ -1,6 +1,6 @@
 # Tilsynsvakt – Tasta skole gym hall
 
-This repo contains a handbook and a static website for *tilsynsvakter* (guards) in the gym hall at Tasta skole. The guard is the key holder and makes sure the gym hall is used responsibly. The scheme is run by Tasta skolekorps (school band).
+This repo contains a handbook, a static frontend and a .NET backend for *tilsynsvakter* (guards) in the gym hall at Tasta skole. The guard is the key holder and makes sure the gym hall is used responsibly. The scheme is run by Tasta skolekorps (school band).
 
 ## Language and format
 
@@ -12,9 +12,9 @@ This repo contains a handbook and a static website for *tilsynsvakter* (guards) 
 ## Security – absolute rules
 
 - **Never** write the door code, key box code or any other access code in the repo, code, commits or generated files. In user-facing text write «koden står i permen» instead.
-- **Never** put Spond credentials, GitHub tokens or other secrets in client-side code. The website is public.
-- Secrets are stored only as GitHub Actions Secrets.
-- Contact info from the usage plan (name, phone, email) and the guard roster (date, name, phone) is approved for publishing. Do not publish any other personal data from Spond (e.g. children/members, addresses).
+- **Never** put Spond credentials, GitHub tokens or other secrets in frontend code or the repo. The frontend is public.
+- Secrets are stored only as GitHub Actions Secrets or in the Azure Container Apps secret store.
+- Contact info from the usage plan (name, phone, email) and the guard roster (date, name, phone) is approved for publishing. Do not store or publish any other personal data (e.g. children/members, addresses).
 
 ## Guard instructions (source: «Forenklet instruks»)
 
@@ -27,8 +27,8 @@ This repo contains a handbook and a static website for *tilsynsvakter* (guards) 
 4. **During the shift:** The guard has their own room at the top of the stairs outside the gym hall, and must be available to assist those in the gym hall.
 5. **The shift lasts** until the last group has left the gym hall (no later than approx. 22:00). If a group doesn't show up or leaves early, lock the gym hall; the guard may leave if no more groups are coming.
 6. **Inspection round at end:** Same round as at start. Lock the lower entrance and main doors.
-7. **Handover:** Deliver the perm to the next guard's home (see roster in Spond/the perm). After Thursday the next shift is Tuesday, because board representatives cover Mondays.
-8. The roster may change after printing – Spond always has the current version (QR code in the perm).
+7. **Handover:** Deliver the perm to the next guard's home (see roster on the website/in the perm). After Thursday the next shift is Tuesday, because board representatives cover Mondays.
+8. The roster may change after printing – the website always has the current version (QR code in the perm). Spond is only used for reminders.
 
 A key box is **planned** but not established. Refer to it as planned, without location or code.
 
@@ -37,7 +37,7 @@ Questions: Leif Bjarte Johansson, 924 23 946, leif.bjarte@gmail.com.
 ## Shift days
 
 - **Monday:** board representatives.
-- **Tuesday–Thursday:** band parents, per the roster in Spond.
+- **Tuesday–Thursday:** band parents, per the roster on the website.
 - **Friday:** no activity.
 - Outside the periods 01.09–28.11 and 05.01–29.05, only Monday (skolekorps) has activity.
 - The guard is responsible for the **gym hall** only, not *musikkaula* (music hall).
@@ -59,21 +59,37 @@ Questions: Leif Bjarte Johansson, 924 23 946, leif.bjarte@gmail.com.
 
 Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and Wed 14–21; Tasta Historielag Wed 19–22 (4–5 meetings per year).
 
-## Website
+## Architecture
 
-- Static website hosted on **GitHub Pages**. No server-side code; everything must be servable as static files.
-- Mobile first – used on a phone in the hallway by the gym hall.
+- **Frontend:** static website on **GitHub Pages**. Mobile first – used on a phone in the hallway by the gym hall.
+- **Backend:** .NET minimal API, orchestrated with **Aspire** and deployed to **Azure Container Apps (express)**.
+- **Trust-based:** no authentication. The guard selects their name (selection, not login), and anyone can sign up for or change any shift.
+
+## Source of truth
+
+- The **backend** is the master for the guard roster. It replaces the open Google Sheet used today.
+- **Spond is not master** – it is only a reminder system that is synced from the backend.
+
+## Frontend
+
 - Features:
   - **Today's plan:** who is in the gym hall now / next, based on usage plan and date.
   - **Contact list** with tap-to-call.
   - **Roster:** my shifts and who to hand the perm over to.
+  - **Sign-up:** sign up for open guard shifts via the backend.
   - **Incident report:** one generic form where the incident type is selected. Delivery is **not decided** – build only the form, no submission, until clarified.
-- **Personalisation** in `localStorage` (no login): the guard selects their name → sees own shifts, next handover and checklist progress for today's shift.
-- Data such as the usage plan and roster is stored as JSON in the repo and read by the site.
+- **Personalisation:** the selected name is stored in `localStorage`; the guard then sees own shifts, next handover and checklist progress for today's shift.
+- Static data such as the usage plan is stored as JSON in the repo.
 
-## Spond integration
+## Backend
 
-- Spond has no official public API. **Never** call Spond from the browser.
-- A scheduled GitHub Action fetches the roster using Spond credentials from Secrets and commits JSON (date, name, phone) to the repo.
-- Source: group **Tasta Skolekorps – Medlemmer → subgroup Tilsynsvakt**. Each shift is one event with the guard as attendee.
-- The website never writes anything back to Spond.
+- Persists which shifts each guard signs up for. Stores only date, name and phone per shift.
+- No authentication. Validate input and restrict CORS to the frontend origin.
+- Persistence store: not decided.
+
+## Spond sync
+
+- Spond has no official public API. **Never** call Spond from the browser or the backend API.
+- A scheduled GitHub Action reads the roster from the backend API and syncs it to Spond using Spond credentials from Secrets.
+- Target: group **Tasta Skolekorps – Medlemmer → subgroup Tilsynsvakt**. Each shift is one event with the guard as attendee.
+- Sync is one-way (backend → Spond). Nothing is read back from Spond.
