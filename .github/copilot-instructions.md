@@ -85,7 +85,7 @@ Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and We
 
 - Persists which shifts each guard signs up for. Stores only date, name and phone per shift.
 - No authentication. Validate input and restrict CORS to the frontend origin.
-- Persistence store: not decided.
+- Persistence store: SQLite on a mounted volume, accessed via EF Core.
 
 ## Spond sync
 

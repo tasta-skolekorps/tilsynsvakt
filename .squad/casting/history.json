@@ -1,4 +1,22 @@
 {
-  "universe_usage_history": [],
-  "assignment_cast_snapshots": {}
+  "universe_usage_history": [
+    {
+      "universe": "descriptive",
+      "assignment_id": "tilsynsvakt-initial-2026-10-03",
+      "used_at": "2026-10-03T09:07:58.155Z"
+    }
+  ],
+  "assignment_cast_snapshots": {
+    "tilsynsvakt-initial-2026-10-03": {
+      "universe": "descriptive",
+      "agents": {
+        "lead": "Lead",
+        "backend": "Backend",
+        "frontend": "Frontend",
+        "tester": "Tester",
+        "infra": "Infra"
+      },
+      "created_at": "2026-10-03T09:07:58.155Z"
+    }
+  }
 }

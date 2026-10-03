@@ -12,6 +12,15 @@
 
 | Name | Role | Charter | Status |
 |------|------|---------|--------|
+| Lead | Lead | .squad/agents/lead/charter.md | ✅ Active |
+| Backend | Backend Dev | .squad/agents/backend/charter.md | ✅ Active |
+| Frontend | Frontend Dev | .squad/agents/frontend/charter.md | ✅ Active |
+| Tester | Tester | .squad/agents/tester/charter.md | ✅ Active |
+| Infra | Infrastructure | .squad/agents/infra/charter.md | ✅ Active |
+| Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
+| Ralph | Work Monitor | — | 🔄 Monitor |
+| Rai | RAI Reviewer | `.squad/agents/Rai/charter.md` | 🛡️ RAI |
+| Fact Checker | Fact Checker | `.squad/agents/fact-checker/charter.md` | 🔍 Verifier |
 
 
 ## Coding Agent
@@ -50,4 +59,6 @@
 ## Project Context
 
 - **Project:** tilsynsvakt
+- **Owner:** Unavailable (git config user.name could not be read)
+- **Stack:** Mobile-first static frontend on GitHub Pages; .NET minimal API orchestrated with Aspire and deployed to Azure Container Apps (express)
 - **Created:** 2026-10-03

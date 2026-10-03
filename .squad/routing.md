@@ -6,9 +6,11 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-
-Preset installation adds concrete routes for the configured team. Add or edit rows
-here only when their agent names also exist in the casting registry.
+| Cross-cutting architecture and work decomposition | Lead | System boundaries, implementation sequencing, technical decisions |
+| Backend API and roster behavior | Backend | .NET minimal API, validation, CORS, roster endpoints |
+| Static frontend and user experience | Frontend | GitHub Pages UI, mobile workflows, Norwegian Bokmål content |
+| Testing and quality | Tester | API/UI tests, edge cases, regression checks |
+| CI, deployment, hosting, and runtime | Infra | GitHub Actions, Azure Container Apps, GitHub Pages deployment |
 
 ## Issue Routing
 
