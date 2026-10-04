@@ -234,6 +234,7 @@ async function loadShifts({ message } = {}) {
     state.apiAvailable = true;
     renderShifts();
     renderHandover();
+    renderSignoff();
     if (message) showNotice(message, "success");
   } catch (error) {
     for (const container of [elements.myShifts, elements.allShifts]) {
@@ -550,6 +551,43 @@ function saveChecklistState(done) {
   }
 }
 
+function todayShift() {
+  return state.shifts.find(shift => shift.date === todayIso()) ?? null;
+}
+
+function renderSignoff() {
+  const box = document.querySelector("#checklist-signoff");
+  const shift = todayShift();
+  const guard = getSelectedGuard();
+  box.replaceChildren();
+  box.classList.remove("is-signed");
+  if (!shift || shift.status !== "taken") {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const own = Boolean(guard) && shift.guard.id === guard.id;
+  const signed = shift.signedOffAt;
+  const complete = todayChecklistState().length === checklist.length;
+  if (signed) {
+    box.classList.add("is-signed");
+    const time = new Intl.DateTimeFormat("nb-NO", { timeZone: osloZone, hour: "2-digit", minute: "2-digit" }).format(new Date(signed));
+    box.append(node("p", "signoff-text", `${shift.guard.name} avsluttet vakten kl. ${time}. Takk for innsatsen!`));
+  } else {
+    box.append(node("p", "signoff-text", !own
+      ? `Dagens vakt er ${shift.guard.name}. Velg navnet ditt øverst for å avslutte vakten.`
+      : complete ? "Alt er huket av. Du kan nå avslutte vakten." : "Huk av alle punktene for å kunne avslutte vakten."));
+  }
+  if (!own) return;
+  const button = node("button", `button ${signed ? "button-secondary" : "button-primary"}`, signed ? "Angre avslutning" : "Avslutt vakten");
+  button.type = "button";
+  button.disabled = !signed && !complete;
+  button.addEventListener("click", () => signed
+    ? mutateShift(`/api/shifts/${shift.date}/signoff?expectedGuardId=${guard.id}`, { method: "DELETE" }, "Avslutningen er angret.")
+    : mutateShift(`/api/shifts/${shift.date}/signoff`, { method: "PUT", body: JSON.stringify({ guardId: guard.id }) }, "Vakten er avsluttet. Takk for innsatsen!"));
+  box.append(button);
+}
+
 function renderChecklist() {
   const done = new Set(todayChecklistState());
   elements.checklistItems.replaceChildren();
@@ -570,11 +608,13 @@ function renderChecklist() {
       saveChecklistState([...done]);
       label.classList.toggle("is-done", input.checked);
       updateChecklistProgress(done.size);
+      renderSignoff();
     });
     label.append(input, node("span", "", item.label));
     elements.checklistItems.append(label);
   });
   updateChecklistProgress(done.size);
+  renderSignoff();
 }
 
 function updateChecklistProgress(count) {
@@ -605,6 +645,7 @@ function setupForms() {
     else localStorage.removeItem(guardStorageKey);
     renderHandover();
     renderShifts();
+    renderSignoff();
   });
 
   elements.swapForm.addEventListener("submit", async event => {

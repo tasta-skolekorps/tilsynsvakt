@@ -49,6 +49,31 @@ public static class ShiftEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
+        shifts.MapPut("/{date}/signoff", SignOffAsync)
+            .RequireRateLimiting("mutations")
+            .WithName("SignOffShift")
+            .WithSummary("Sign off a finished shift")
+            .WithDescription("Marks today's shift as finished by the guard holding it.")
+            .Produces<ShiftDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
+        shifts.MapDelete("/{date}/signoff", UndoSignOffAsync)
+            .RequireRateLimiting("mutations")
+            .WithName("UndoShiftSignOff")
+            .WithSummary("Undo sign-off of a shift")
+            .WithDescription("Removes the sign-off from today's shift when the expected guard still holds it.")
+            .Produces<ShiftDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status428PreconditionRequired)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
         shifts.MapDelete("/{date}", DeleteAsync)
             .RequireRateLimiting("mutations")
             .WithName("CancelShiftSignup")
@@ -124,6 +149,52 @@ public static class ShiftEndpoints
         var guardId = RequiredId(body.GuardId);
         var expectedGuardId = RequiredId(body.ExpectedGuardId);
         return Results.Ok(await stores.ReplaceAsync(parsedDate, guardId, expectedGuardId, ct));
+    }
+
+    private static async Task<IResult> SignOffAsync(
+        string date,
+        HttpRequest request,
+        IStores stores,
+        ShiftCalendar calendar,
+        TimeProvider clock,
+        CancellationToken ct)
+    {
+        var parsedDate = Req.Date(date);
+        ValidateSignOffDate(parsedDate, calendar, clock);
+        var body = await Req.BodyAsync<SignOffBody>(request, ct);
+        return Results.Ok(await stores.SetSignOffAsync(parsedDate, RequiredId(body.GuardId), clock.GetUtcNow(), ct));
+    }
+
+    private static async Task<IResult> UndoSignOffAsync(
+        string date,
+        HttpRequest request,
+        IStores stores,
+        ShiftCalendar calendar,
+        TimeProvider clock,
+        CancellationToken ct)
+    {
+        var parsedDate = Req.Date(date);
+        ValidateSignOffDate(parsedDate, calendar, clock);
+        if (!request.Query.TryGetValue("expectedGuardId", out var expectedValue))
+        {
+            throw Errors.PreconditionRequired();
+        }
+
+        var guardId = Req.Id(expectedValue.ToString());
+        return Results.Ok(await stores.SetSignOffAsync(parsedDate, guardId, null, ct));
+    }
+
+    private static void ValidateSignOffDate(DateOnly date, ShiftCalendar calendar, TimeProvider clock)
+    {
+        if (!calendar.IsShiftDay(date))
+        {
+            throw Errors.NotAShiftDay(StatusCodes.Status422UnprocessableEntity);
+        }
+
+        if (date != Clock.Today(clock))
+        {
+            throw Errors.SignOffNotToday();
+        }
     }
 
     private static async Task<IResult> DeleteAsync(
