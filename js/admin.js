@@ -18,13 +18,13 @@ const seasonForm = document.querySelector("#season-form");
 const dutiesElement = document.querySelector("#duties");
 const totalsElement = document.querySelector("#totals");
 const seasonRangeElement = document.querySelector("#season-range");
-const seasonSelect = document.querySelector("#season");
+const seasonInputs = document.querySelectorAll("input[name=season]");
 const yearInput = document.querySelector("#year");
 const usernameInput = document.querySelector("#username");
 const passwordInput = document.querySelector("#password");
 
 const defaultSeason = getDefaultSeason(new Date());
-seasonSelect.value = defaultSeason.season;
+seasonInputs.forEach(input => { input.checked = input.value === defaultSeason.season; });
 yearInput.value = defaultSeason.year;
 usernameInput.value = sessionStorage.getItem(storageKeys.username) ?? "";
 passwordInput.value = sessionStorage.getItem(storageKeys.password) ?? "";
@@ -43,6 +43,10 @@ logoutButton.addEventListener("click", () => {
   renderNotice("Du er logget ut.", "success");
 });
 
+document.querySelector("#year-prev").addEventListener("click", () => stepYear(-1));
+document.querySelector("#year-next").addEventListener("click", () => stepYear(1));
+seasonForm.addEventListener("change", () => loadAdminDataSafely());
+
 seasonForm.addEventListener("submit", async event => {
   event.preventDefault();
   await loadAdminDataSafely();
@@ -55,6 +59,15 @@ if (hasCredentials()) {
 function setLoggedIn(loggedIn) {
   panel.hidden = !loggedIn;
   authForm.hidden = loggedIn;
+}
+
+function selectedSeason() {
+  return [...seasonInputs].find(input => input.checked)?.value ?? "autumn";
+}
+
+function stepYear(delta) {
+  yearInput.value = Number(yearInput.value) + delta;
+  return loadAdminDataSafely();
 }
 
 async function loadAdminDataSafely() {
@@ -78,7 +91,7 @@ async function loadAdminData() {
   renderNotice("Laster …");
   const [guards, dutyList] = await Promise.all([
     apiFetch("/api/admin/guards"),
-    apiFetch(`/api/admin/duties?season=${encodeURIComponent(seasonSelect.value)}&year=${encodeURIComponent(yearInput.value)}`),
+    apiFetch(`/api/admin/duties?season=${encodeURIComponent(selectedSeason())}&year=${encodeURIComponent(yearInput.value)}`),
   ]);
 
   state.guards = guards;
