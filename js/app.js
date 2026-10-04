@@ -323,10 +323,83 @@ function renderShifts() {
     elements.signupShifts.append(node("p", "empty-state", "Ingen vakter i den viste perioden."));
     return;
   }
+  elements.allShifts.append(weekTable());
+  for (const shift of state.shifts) elements.signupShifts.append(shiftCard(shift, false, true));
+}
+
+function isoWeek(value) {
+  const date = dateFromIso(value);
+  const day = (date.getUTCDay() + 6) % 7;
+  const monday = new Date(date.getTime() - day * 86400000);
+  const thursday = new Date(monday.getTime() + 3 * 86400000);
+  const yearStart = Date.UTC(thursday.getUTCFullYear(), 0, 1);
+  return {
+    week: Math.floor((thursday.getTime() - yearStart) / (7 * 86400000)) + 1,
+    key: monday.toISOString().slice(0, 10),
+    monday,
+    thursday
+  };
+}
+
+function weekTable() {
+  const weeks = new Map();
   for (const shift of state.shifts) {
-    elements.allShifts.append(shiftCard(shift, false));
-    elements.signupShifts.append(shiftCard(shift, false, true));
+    const info = isoWeek(shift.date);
+    if (!weeks.has(info.key)) weeks.set(info.key, { info, shifts: {} });
+    weeks.get(info.key).shifts[dayIndex(shift.date)] = shift;
   }
+  const days = [[1, "Mandag"], [2, "Tirsdag"], [3, "Onsdag"], [4, "Torsdag"]];
+  const table = node("table", "week-table");
+  table.append(node("caption", "sr-only", "Vaktliste per uke"));
+  const head = node("tr");
+  for (const label of ["Uke", "Dato", ...days.map(day => day[1]), "Ledige"]) {
+    const cell = node("th", "", label);
+    cell.scope = "col";
+    head.append(cell);
+  }
+  const thead = node("thead");
+  thead.append(head);
+  table.append(thead);
+  const body = node("tbody");
+  const currentWeek = isoWeek(todayIso()).key;
+  const format = date => formatDate(date.toISOString().slice(0, 10), { day: "2-digit", month: "2-digit" });
+  for (const { info, shifts } of weeks.values()) {
+    const row = node("tr", info.key === currentWeek ? "week-current" : "");
+    const week = node("th", "", String(info.week));
+    week.scope = "row";
+    row.append(week, node("td", "week-dates", `${format(info.monday)} - ${format(info.thursday)}`));
+    let open = 0;
+    for (const [index] of days) {
+      const shift = shifts[index];
+      const cell = node("td");
+      if (index === 1) {
+        cell.className = "week-board";
+        cell.textContent = "Styrevakt";
+      } else if (!shift) {
+        cell.className = "week-none";
+        cell.textContent = "Ingen vakt";
+      } else if (shift.status === "open") {
+        open++;
+        cell.className = "week-open";
+        const link = node("a", "", "Ledig");
+        link.href = "#pamelding";
+        cell.append(link);
+      } else {
+        cell.textContent = shift.guard.name;
+        if (shift.guard.id === state.selectedGuardId) cell.className = "week-mine";
+      }
+      row.append(cell);
+    }
+    row.append(node("td", "week-count", String(open)));
+    body.append(row);
+  }
+  table.append(body);
+  const wrap = node("div", "week-table-wrap");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", "Vaktliste per uke");
+  wrap.append(table);
+  return wrap;
 }
 
 function shiftCard(shift, mineOnly, signupView = false) {
