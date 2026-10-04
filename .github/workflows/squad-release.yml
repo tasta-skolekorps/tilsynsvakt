@@ -34,6 +34,8 @@ jobs:
       AZURE__RESOURCEGROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       Frontend__Origin: ${{ vars.FRONTEND_ORIGIN }}
       Admin__ApiKey: ${{ vars.ADMIN_API_KEY }}
+      Admin__Username: ${{ vars.ADMIN_USERNAME }}
+      Admin__Password: ${{ vars.ADMIN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
