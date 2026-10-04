@@ -38,7 +38,13 @@ if (builder.ExecutionContext.IsPublishMode)
 {
     // Aspire grants the API's managed identity Table Data Contributor, which is enough to create the table.
     api.WithEnvironment("Storage__CreateTable", "true")
-       .WithExternalHttpEndpoints();
+       .WithExternalHttpEndpoints()
+       .PublishAsAzureContainerApp((_, app) =>
+       {
+           var container = app.Template.Containers[0].Value!;
+           container.Resources.Cpu = 0.25;
+           container.Resources.Memory = "0.5Gi";
+       });
 
     var frontendOrigin = builder.Configuration["Frontend:Origin"];
     if (!string.IsNullOrWhiteSpace(frontendOrigin))
