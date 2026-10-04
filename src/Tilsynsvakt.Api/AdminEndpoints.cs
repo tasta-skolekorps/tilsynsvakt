@@ -13,6 +13,7 @@ public static class AdminEndpoints
     {
         var admin = app.MapGroup("/api/admin")
             .ExcludeFromDescription()
+            .RequireCors("frontend")
             .RequireRateLimiting("admin")
             .AddEndpointFilter((context, next) =>
             {

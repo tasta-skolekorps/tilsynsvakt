@@ -32,7 +32,7 @@ passwordInput.value = sessionStorage.getItem(storageKeys.password) ?? "";
 authForm.addEventListener("submit", async event => {
   event.preventDefault();
   rememberCredentials();
-  await loadAdminData();
+  await loadAdminDataSafely();
 });
 
 logoutButton.addEventListener("click", () => {
@@ -45,14 +45,22 @@ logoutButton.addEventListener("click", () => {
 
 seasonForm.addEventListener("submit", async event => {
   event.preventDefault();
-  await loadAdminData();
+  await loadAdminDataSafely();
 });
 
 if (hasCredentials()) {
-  loadAdminData().catch(error => {
+  loadAdminDataSafely();
+}
+
+async function loadAdminDataSafely() {
+  try {
+    await loadAdminData();
+  } catch (error) {
     console.error(error);
-    renderNotice("Kunne ikke laste administrasjonssiden.", "error");
-  });
+    if (error.message !== "Unauthorized") {
+      renderNotice("Kunne ikke laste administrasjonssiden. Prøv igjen.", "error");
+    }
+  }
 }
 
 async function loadAdminData() {
