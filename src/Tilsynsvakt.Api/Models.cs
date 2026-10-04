@@ -9,7 +9,8 @@ public sealed record GuardDto(int Id, string Name, string Phone);
 public sealed record AdminGuardDto(int Id, string Name, string Phone, bool Active);
 
 /// <summary>A guard's signup state for one shift date.</summary>
-public sealed record ShiftDto(string Date, string DayOfWeek, string Status, GuardDto? Guard)
+/// <remarks><paramref name="SignedOffAt"/> is the UTC time the guard signed off the finished shift, or null.</remarks>
+public sealed record ShiftDto(string Date, string DayOfWeek, string Status, GuardDto? Guard, string? SignedOffAt = null)
 {
     public static ShiftDto From(DateOnly date, GuardDto? guard) =>
         new(Iso(date), date.DayOfWeek.ToString().ToLowerInvariant(), guard is null ? "open" : "taken", guard);
@@ -31,6 +32,9 @@ public sealed record SwapAcceptBody(int? GuardId);
 
 /// <summary>Request body for signing up for a shift.</summary>
 public sealed record SignUpBody(int? GuardId);
+
+/// <summary>Request body for signing off a finished shift.</summary>
+public sealed record SignOffBody(int? GuardId);
 
 /// <summary>Request body for replacing a shift signup.</summary>
 public sealed record ReplaceBody(int? GuardId, int? ExpectedGuardId);

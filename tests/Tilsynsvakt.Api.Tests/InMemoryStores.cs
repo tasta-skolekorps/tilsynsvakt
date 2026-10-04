@@ -140,6 +140,27 @@ public sealed class InMemoryStores : IStores, IStoreLifecycle
         }
     }
 
+    public Task<ShiftDto> SetSignOffAsync(DateOnly date, int guardId, DateTimeOffset? signedOffAt, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_shifts.TryGetValue(date, out var current))
+            {
+                throw Errors.ShiftNotTaken();
+            }
+
+            if (current.Guard!.Id != guardId)
+            {
+                throw Errors.ShiftChanged(current);
+            }
+
+            var updated = current with { SignedOffAt = signedOffAt?.ToUniversalTime().ToString("O") };
+            _shifts[date] = updated;
+            return Task.FromResult(updated);
+        }
+    }
+
     public Task DeleteAsync(DateOnly date, int? expectedGuardId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

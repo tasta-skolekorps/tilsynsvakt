@@ -56,6 +56,9 @@ public static class Errors
     public static ApiException DateInPast() =>
         new(422, "date_in_past", "Dato i fortiden", "Vakter i fortiden kan ikke endres.");
 
+    public static ApiException SignOffNotToday() =>
+        new(422, "signoff_not_today", "Kan ikke avslutte vakten", "Du kan bare avslutte vakten på vaktdagen.");
+
     public static ApiException DateTooFarAhead() =>
         new(422, "date_too_far_ahead", "Dato for langt frem i tid", "Vakter kan bare endres inntil 400 dager frem i tid.");
 

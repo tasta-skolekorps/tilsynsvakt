@@ -346,6 +346,45 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Signoff_is_limited_to_todays_shift_and_its_guard_and_can_be_undone()
+    {
+        using var signoffFactory = new ApiFactory();
+        using var client = signoffFactory.CreateClient();
+        var guard = await CreateGuardAsync(client);
+        var other = await CreateGuardAsync(client);
+        signoffFactory.Time.SetUtcNow(new DateTimeOffset(2026, 10, 6, 12, 0, 0, TimeSpan.Zero));
+
+        using var open = await client.PutAsync("/api/shifts/2026-10-06/signoff", JsonContent.Create(new { guardId = guard.Id }));
+        await AssertProblemAsync(open, HttpStatusCode.NotFound, "shift_not_taken");
+
+        using var signup = await client.PostAsync("/api/shifts/2026-10-06/signup", JsonContent.Create(new { guardId = guard.Id }));
+        Assert.Equal(HttpStatusCode.Created, signup.StatusCode);
+
+        using var foreign = await client.PutAsync("/api/shifts/2026-10-06/signoff", JsonContent.Create(new { guardId = other.Id }));
+        await AssertProblemAsync(foreign, HttpStatusCode.Conflict, "shift_changed");
+
+        using var tomorrow = await client.PutAsync("/api/shifts/2026-10-07/signoff", JsonContent.Create(new { guardId = guard.Id }));
+        await AssertProblemAsync(tomorrow, HttpStatusCode.UnprocessableEntity, "signoff_not_today");
+
+        using var signed = await client.PutAsync("/api/shifts/2026-10-06/signoff", JsonContent.Create(new { guardId = guard.Id }));
+        Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
+        using var signedBody = await JsonDocument.ParseAsync(await signed.Content.ReadAsStreamAsync());
+        Assert.NotNull(signedBody.RootElement.GetProperty("signedOffAt").GetString());
+
+        using var read = await client.GetAsync("/api/shifts/2026-10-06");
+        using var readBody = await JsonDocument.ParseAsync(await read.Content.ReadAsStreamAsync());
+        Assert.NotNull(readBody.RootElement.GetProperty("signedOffAt").GetString());
+
+        using var missingPrecondition = await client.DeleteAsync("/api/shifts/2026-10-06/signoff");
+        await AssertProblemAsync(missingPrecondition, (HttpStatusCode)428, "precondition_required");
+
+        using var undone = await client.DeleteAsync($"/api/shifts/2026-10-06/signoff?expectedGuardId={guard.Id}");
+        Assert.Equal(HttpStatusCode.OK, undone.StatusCode);
+        using var undoneBody = await JsonDocument.ParseAsync(await undone.Content.ReadAsStreamAsync());
+        Assert.Equal(JsonValueKind.Null, undoneBody.RootElement.GetProperty("signedOffAt").ValueKind);
+    }
+
+    [Fact]
     public async Task Cors_echoes_only_the_configured_origin()
     {
         var configuration = factory.Services.GetRequiredService<IConfiguration>();

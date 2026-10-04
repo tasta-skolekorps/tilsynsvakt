@@ -234,6 +234,40 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
         throw Errors.StorageBusy();
     }
 
+    public async Task<ShiftDto> SetSignOffAsync(DateOnly date, int guardId, DateTimeOffset? signedOffAt, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < MaxConcurrencyAttempts; attempt++)
+        {
+            var entity = await ReadEntityAsync(ShiftRowKey(date), ct) ?? throw Errors.ShiftNotTaken();
+            var current = ToShift(entity, date);
+            if (current.Guard!.Id != guardId)
+            {
+                throw Errors.ShiftChanged(current);
+            }
+
+            if (signedOffAt is null)
+            {
+                entity.Remove("SignedOffAt");
+            }
+            else
+            {
+                entity["SignedOffAt"] = signedOffAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            }
+
+            try
+            {
+                await Table.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Replace, ct);
+                return ToShift(entity, date);
+            }
+            catch (RequestFailedException ex) when (IsConditionNotSatisfied(ex) || IsEntityNotFound(ex))
+            {
+                await DelayBeforeRetryAsync(attempt, ct);
+            }
+        }
+
+        throw Errors.StorageBusy();
+    }
+
     public async Task DeleteAsync(DateOnly date, int? expectedGuardId, CancellationToken ct)
     {
         var currentEntity = await ReadEntityAsync(ShiftRowKey(date), ct);
@@ -451,7 +485,8 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
 
     private static ShiftDto ToShift(TableEntity entity, DateOnly date) =>
         ShiftDto.From(date, new GuardDto(
-            ReadInt32(entity, "GuardId"), ReadString(entity, "GuardName"), ReadString(entity, "GuardPhone")));
+            ReadInt32(entity, "GuardId"), ReadString(entity, "GuardName"), ReadString(entity, "GuardPhone")))
+        with { SignedOffAt = entity.TryGetValue("SignedOffAt", out var signedOffAt) ? signedOffAt as string : null };
 
     private static GuardDto ToGuardDto(TableEntity entity) =>
         new(ReadInt32(entity, "Id"), ReadString(entity, "Name"), ReadString(entity, "Phone"));
