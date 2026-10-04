@@ -267,8 +267,8 @@ function renderPlan() {
     elements.planWarning.textContent = "Den lokale ukeplanen kunne ikke lastes.";
     return;
   }
-  elements.planWarning.textContent = `Ukeplan ${plan.schoolYear} · foreldet etter ${formatDate(plan.validTo)}. Ny plan for 2026–2027 er ikke publisert.`;
   const isCurrentPlan = today >= plan.validFrom && today <= plan.validTo;
+  elements.planWarning.textContent = isCurrentPlan ? "" : `Ukeplan ${plan.schoolYear} gjelder ${formatDate(plan.validFrom)}–${formatDate(plan.validTo)}. Ny plan er ikke publisert.`;
   const entries = isCurrentPlan
     ? plan.entries.filter(entry => entry.day === (day || 7) && isEntryActive(entry, today)).sort((a, b) => a.start.localeCompare(b.start))
     : [];

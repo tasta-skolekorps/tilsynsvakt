@@ -2,6 +2,5 @@
   { "id": "turn", "name": "May Brit H. Osaland", "group": "Tasta turn", "phone": "97981385", "email": "mbho@proconri.no" },
   { "id": "korps", "name": "Merete Gustavson", "group": "Tasta skolekorps", "phone": "90741260", "email": "msl@lyse.net" },
   { "id": "pol", "name": "Tor Gunnar Tollaksen", "group": "Pol Idrettslag", "phone": "47084832", "email": "tor.gunnar.tollaksen@gmail.com" },
-  { "id": "fotball", "name": "Christer Waldow", "group": "Fotballgjengen", "phone": "97669565", "email": "chrwald@lyse.net" },
   { "id": "question", "name": "Leif Bjarte Johansson", "group": "Spørsmål om tilsynsvakt", "phone": "92423946", "email": "leifbjarte@gmail.com" }
 ]
