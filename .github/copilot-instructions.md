@@ -42,9 +42,9 @@ Questions: Leif Bjarte Johansson, 924 23 946, leif.bjarte@gmail.com.
 - Outside the periods 01.09–28.11 and 05.01–29.05, only Monday (skolekorps) has activity.
 - The guard is responsible for the **gym hall** only, not *musikkaula* (music hall).
 
-## Usage plan 2025–2026 (gym hall)
+## Usage plan 2026–2027 (gym hall)
 
-> Outdated: a usage plan for 2026–2027 is coming. Replace this table when available.
+> Source: «Brukplan 2026–2027» (updated for the 2026–2027 season).
 
 | Day | Time | Group | Contact | Period |
 |-----|------|-------|---------|--------|
@@ -53,7 +53,7 @@ Questions: Leif Bjarte Johansson, 924 23 946, leif.bjarte@gmail.com.
 | Tirsdag | 17:00–20:00 | Tasta turn | May Brit H. Osaland, 979 81 385, mbho@proconri.no | 01.09–28.11, 05.01–29.05 |
 | Tirsdag | 20:00–22:00 | Pol Idrettslag | Tor Gunnar Tollaksen, 470 84 832, tor.gunnar.tollaksen@gmail.com | 01.09–28.11, 05.01–29.05 |
 | Onsdag | 17:00–21:00 | Tasta turn | May Brit H. Osaland, 979 81 385, mbho@proconri.no | 01.09–28.11, 05.01–29.05 |
-| Onsdag | 21:00–22:00 | Fotballgjengen | Christer Waldow, 976 69 565, chrwald@lyse.net | 01.09–28.11, 05.01–29.05 |
+| Onsdag | 21:00–22:00 | *Ledig* (free) | – | – |
 | Torsdag | 17:00–21:00 | Tasta turn | May Brit H. Osaland, 979 81 385, mbho@proconri.no | 01.09–28.11, 05.01–29.05 |
 | Torsdag | 21:00–22:00 | *Ledig* (free) | – | – |
 
