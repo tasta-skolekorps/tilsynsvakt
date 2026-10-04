@@ -9,6 +9,17 @@
       "tools": [
         "*"
       ]
-    }
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "tools": [
+        "*"
+      ],
+      "id": "",
+      "headers": {
+        "X-MCP-Toolsets": "git,issues,labels,projects,repos,pull_requests,users"
+      }
+    },
   }
 }

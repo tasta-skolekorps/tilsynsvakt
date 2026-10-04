@@ -267,7 +267,7 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
 }
 
 /* Cubist theme */
-body { background-image: url("./pattern.svg"); background-size: 320px 320px; background-attachment: fixed; }
+body { background-image: url("./pattern.svg"); background-size: 320px 320px; background-attachment: scroll; }
 a { color: var(--navy); }
 .page-heading h1, .section-heading h2, .subheading, .checklist-heading, .now-title, .contact-detail h2, .incident-preview h2 { font-weight: 400; letter-spacing: .01em; text-transform: uppercase; }
 .page-heading h1 { font-size: clamp(30px, 8vw, 44px); }
