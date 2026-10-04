@@ -376,6 +376,66 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.DoesNotContain(" at Tilsynsvakt.", body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Swap_request_must_be_approved_by_the_target_guard_and_swaps_both_shifts()
+    {
+        var requester = await CreateGuardAsync();
+        var target = await CreateGuardAsync();
+        var date = NextTestDate();
+        var targetDate = NextTestDate();
+        (await PostSignupAsync(date, requester.Id)).Dispose();
+        (await PostSignupAsync(targetDate, target.Id)).Dispose();
+        var path = $"/api/swap-requests/{date:yyyy-MM-dd}/{targetDate:yyyy-MM-dd}";
+
+        using var created = await _client.PostAsync("/api/swap-requests", JsonContent.Create(new
+        {
+            date = date.ToString("yyyy-MM-dd"),
+            targetDate = targetDate.ToString("yyyy-MM-dd"),
+            requesterGuardId = requester.Id,
+        }));
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        using var byRequester = await _client.PostAsync($"{path}/accept", JsonContent.Create(new { guardId = requester.Id }));
+        await AssertProblemAsync(byRequester, HttpStatusCode.Forbidden, "swap_forbidden");
+
+        using var accepted = await _client.PostAsync($"{path}/accept", JsonContent.Create(new { guardId = target.Id }));
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+
+        using var first = await _client.GetAsync($"/api/shifts/{date:yyyy-MM-dd}");
+        using var firstDoc = await JsonDocument.ParseAsync(await first.Content.ReadAsStreamAsync());
+        Assert.Equal(target.Id, firstDoc.RootElement.GetProperty("guard").GetProperty("id").GetInt32());
+        using var second = await _client.GetAsync($"/api/shifts/{targetDate:yyyy-MM-dd}");
+        using var secondDoc = await JsonDocument.ParseAsync(await second.Content.ReadAsStreamAsync());
+        Assert.Equal(requester.Id, secondDoc.RootElement.GetProperty("guard").GetProperty("id").GetInt32());
+
+        using var gone = await _client.PostAsync($"{path}/accept", JsonContent.Create(new { guardId = target.Id }));
+        await AssertProblemAsync(gone, HttpStatusCode.NotFound, "swap_request_not_found");
+    }
+
+    [Fact]
+    public async Task Swap_request_can_be_declined_and_is_hidden_when_a_shift_changes()
+    {
+        var requester = await CreateGuardAsync();
+        var target = await CreateGuardAsync();
+        var date = NextTestDate();
+        var targetDate = NextTestDate();
+        (await PostSignupAsync(date, requester.Id)).Dispose();
+        (await PostSignupAsync(targetDate, target.Id)).Dispose();
+        var key = $"{date:yyyy-MM-dd}/{targetDate:yyyy-MM-dd}";
+        var body = JsonContent.Create(new { date = $"{date:yyyy-MM-dd}", targetDate = $"{targetDate:yyyy-MM-dd}", requesterGuardId = requester.Id });
+        (await _client.PostAsync("/api/swap-requests", body)).Dispose();
+
+        var listed = await _client.GetStringAsync("/api/swap-requests");
+        Assert.Contains(key.Split('/')[0], listed);
+
+        using var decline = await _client.DeleteAsync($"/api/swap-requests/{key}?guardId={target.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, decline.StatusCode);
+        Assert.DoesNotContain(requester.Name, await _client.GetStringAsync("/api/swap-requests"));
+
+        (await _client.PostAsync("/api/swap-requests", JsonContent.Create(new { date = $"{date:yyyy-MM-dd}", targetDate = $"{targetDate:yyyy-MM-dd}", requesterGuardId = requester.Id }))).Dispose();
+        (await _client.DeleteAsync($"/api/shifts/{date:yyyy-MM-dd}?expectedGuardId={requester.Id}")).Dispose();
+        Assert.DoesNotContain(requester.Name, await _client.GetStringAsync("/api/swap-requests"));
+    }
     private static DateOnly NextTestDate() => AvailableTestDates[Interlocked.Increment(ref _dateIndex) % AvailableTestDates.Length];
 
     private async Task<(int Id, string Name)> CreateGuardAsync() => await CreateGuardAsync(_client);

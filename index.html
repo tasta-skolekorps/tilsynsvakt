@@ -32,7 +32,6 @@
   <nav class="main-nav" aria-label="Hovedmeny">
     <a href="#plan" data-view="plan">I dag</a>
     <a href="#vaktliste" data-view="vaktliste">Vaktliste</a>
-    <a href="#pamelding" data-view="pamelding">Påmelding</a>
     <a href="#kontakter" data-view="kontakter">Kontakter</a>
     <a href="#sjekkliste" data-view="sjekkliste">Sjekkliste</a>
     <a href="#rapport" data-view="rapport">Rapport</a>
@@ -68,21 +67,20 @@
       <div class="handover-panel"><p class="eyebrow">Neste vakt etter din</p><p id="roster-handover">Velg navnet ditt for å se overleveringen.</p></div>
       <h2 class="subheading">Mine vakter</h2>
       <div id="my-shifts" class="shift-list" aria-live="polite"><p class="loading">Laster vaktliste …</p></div>
+      <div id="swap-requests-area" hidden>
+        <h2 class="subheading">Byteforespørsler</h2>
+        <div id="swap-requests" class="shift-list" aria-live="polite"></div>
+      </div>
       <h2 class="subheading">Alle vakter</h2>
+      <form id="swap-form" class="swap-form" hidden>
+        <p id="swap-summary" class="swap-summary"></p>
+        <label for="swap-own-shift">Din vakt du vil bytte bort</label>
+        <div class="form-row"><select id="swap-own-shift" required></select></div>
+        <p class="muted small-copy">Byttet skjer først når den andre tilsynsvakten godkjenner forespørselen her i vaktlisten.</p>
+        <div class="form-row"><button class="button button-primary" type="submit">Send forespørsel</button><button class="button button-secondary" id="swap-cancel" type="button">Avbryt</button></div>
+      </form>
       <div id="all-shifts" class="shift-list"><p class="loading">Laster vaktliste …</p></div>
     </section>
-
-    <section id="view-pamelding" class="view" aria-labelledby="signup-title" hidden>
-      <div class="page-heading"><div><p class="eyebrow">Ledige vakter · tirsdag–torsdag</p><h1 id="signup-title">Påmelding</h1></div></div>
-      <p class="intro-copy">Velg en ledig vakt for å melde deg på. Vaktlisten oppdateres fra fellessystemet.</p>
-      <form id="signup-form" class="signup-form">
-        <label for="open-shift-select">Ledig vakt</label>
-        <div class="form-row"><select id="open-shift-select" required><option value="">Laster vakter …</option></select><button class="button button-primary" type="submit">Meld meg på</button></div>
-      </form>
-      <div id="signup-shifts" class="shift-list"><p class="loading">Laster vaktliste …</p></div>
-      <p class="muted small-copy">Du kan melde på eller endre en vakt for valgfri tilsynsvakt. Endringer kontrolleres mot siste lagrede vaktliste.</p>
-    </section>
-
     <section id="view-kontakter" class="view" aria-labelledby="contacts-title" hidden>
       <div class="page-heading"><div><p class="eyebrow">Hjelp og praktiske spørsmål</p><h1 id="contacts-title">Kontakter</h1></div></div>
       <div id="contact-list" class="contact-list"><p class="loading">Laster kontakter …</p></div>

@@ -77,6 +77,15 @@ public static class Errors
     public static ApiException ShiftChanged(ShiftDto current) =>
         new(409, "shift_changed", "Vakten er endret", "Vakten har blitt endret av noen andre. Last inn på nytt.", current);
 
+    public static ApiException SwapRequestNotFound() =>
+        new(404, "swap_request_not_found", "Fant ikke forespørselen", "Byteforespørselen finnes ikke lenger.");
+
+    public static ApiException SwapForbidden() =>
+        new(403, "swap_forbidden", "Ikke tillatt", "Bare tilsynsvakten forespørselen er sendt til kan godkjenne den, og bare de to involverte kan avslå eller trekke den.");
+
+    public static ApiException SwapInvalid() =>
+        new(422, "swap_invalid", "Ugyldig bytte", "Du kan ikke bytte vakt med deg selv eller bytte en vakt med seg selv.");
+
     public static ApiException Unauthorized() =>
         new(401, "unauthorized", "Ikke autorisert", "Manglende eller ugyldig nøkkel.");
 

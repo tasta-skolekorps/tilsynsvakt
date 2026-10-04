@@ -20,6 +20,15 @@ public sealed record ShiftDto(string Date, string DayOfWeek, string Status, Guar
 /// <summary>A range of eligible shifts returned by the API.</summary>
 public sealed record ShiftListDto(string From, string To, IReadOnlyList<ShiftDto> Shifts);
 
+/// <summary>A pending request to swap two taken shifts, awaiting approval by the target guard.</summary>
+public sealed record SwapRequestDto(string Date, string TargetDate, GuardDto Requester, GuardDto Target);
+
+/// <summary>Request body for creating a swap request.</summary>
+public sealed record SwapRequestBody(string? Date, string? TargetDate, int? RequesterGuardId);
+
+/// <summary>Request body for accepting a swap request.</summary>
+public sealed record SwapAcceptBody(int? GuardId);
+
 /// <summary>Request body for signing up for a shift.</summary>
 public sealed record SignUpBody(int? GuardId);
 
