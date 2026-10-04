@@ -7,10 +7,15 @@ public sealed class ShiftCalendar
     private sealed record Period(int Start, int End, int StartMonth, int StartDay, int EndMonth, int EndDay, string SeasonKey);
 
     private readonly Period[] _periods;
+    private readonly (DateOnly From, DateOnly To)[] _closed;
 
-    private ShiftCalendar(Period[] periods) => _periods = periods;
+    private ShiftCalendar(Period[] periods, (DateOnly, DateOnly)[] closed)
+    {
+        _periods = periods;
+        _closed = closed;
+    }
 
-    public static ShiftCalendar FromConfiguration(IConfiguration periods)
+    public static ShiftCalendar FromConfiguration(IConfiguration periods, IConfiguration? closedPeriods = null)
     {
         var parsed = periods.GetChildren()
             .Select(child =>
@@ -33,13 +38,27 @@ public sealed class ShiftCalendar
             throw new InvalidOperationException("Calendar:Periods must contain at least one period with Start <= End.");
         }
 
-        return new ShiftCalendar(parsed);
+        var closed = (closedPeriods?.GetChildren() ?? [])
+            .Select(child => (ParseDate(child["From"]), ParseDate(child["To"])))
+            .ToArray();
+
+        if (closed.Any(range => range.Item1 > range.Item2))
+        {
+            throw new InvalidOperationException("Calendar:Closed must contain ranges with From <= To.");
+        }
+
+        return new ShiftCalendar(parsed, closed);
     }
 
     // Tuesday to Thursday inside a configured period; Monday is covered by the board and Friday has no activity.
     public bool IsShiftDay(DateOnly date)
     {
         if (date.DayOfWeek is not (DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Thursday))
+        {
+            return false;
+        }
+
+        if (_closed.Any(range => date >= range.From && date <= range.To))
         {
             return false;
         }
@@ -51,6 +70,11 @@ public sealed class ShiftCalendar
     public bool IsAdminDutyDay(DateOnly date)
     {
         if (date.DayOfWeek is not (DayOfWeek.Monday or DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Thursday))
+        {
+            return false;
+        }
+
+        if (_closed.Any(range => date >= range.From && date <= range.To))
         {
             return false;
         }
@@ -73,6 +97,16 @@ public sealed class ShiftCalendar
         from = new DateOnly(year, period.StartMonth, period.StartDay);
         to = new DateOnly(year, period.EndMonth, period.EndDay);
         return true;
+    }
+
+    private static DateOnly ParseDate(string? value)
+    {
+        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            throw new InvalidOperationException($"Calendar closed date '{value}' must be formatted yyyy-MM-dd.");
+        }
+
+        return date;
     }
 
     private static DateOnly ParseMonthDay(string? value)
