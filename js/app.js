@@ -174,7 +174,17 @@ async function loadStaticData() {
 
 async function loadGuards() {
   try {
-    state.guardList = await apiRequest("/api/guards");
+    const [staticGuards, apiGuards] = await Promise.all([
+      fetch("./data/guards.json", { cache: "no-cache" }).then(response => {
+        if (!response.ok) throw new Error("Kunne ikke laste navnelisten.");
+        return response.json();
+      }),
+      apiRequest("/api/guards")
+    ]);
+    const normalize = name => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("nb");
+    const apiByName = new Map(apiGuards.map(guard => [normalize(guard.name), guard]));
+    const entries = staticGuards.map(guard => ({ name: guard.name, api: apiByName.get(normalize(guard.name)) }));
+    state.guardList = entries.filter(entry => entry.api).map(entry => entry.api);
     let saved;
     try {
       saved = JSON.parse(localStorage.getItem(guardStorageKey) || "null");
@@ -183,7 +193,11 @@ async function loadGuards() {
     }
     const savedId = Number(saved?.id);
     elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
-    for (const guard of state.guardList) elements.guardSelect.add(new Option(guard.name, String(guard.id)));
+    for (const entry of entries) {
+      const option = new Option(entry.name, String(entry.api?.id ?? ""));
+      option.disabled = !entry.api;
+      elements.guardSelect.add(option);
+    }
     if (state.guardList.some(guard => guard.id === savedId)) {
       state.selectedGuardId = savedId;
       elements.guardSelect.value = String(savedId);
@@ -191,7 +205,7 @@ async function loadGuards() {
       localStorage.removeItem(guardStorageKey);
     }
     state.apiAvailable = true;
-    elements.guardStatus.textContent = `${state.guardList.length} tilsynsvakter tilgjengelig.`;
+    elements.guardStatus.textContent = `${state.guardList.length} av ${entries.length} tilsynsvakter kan melde seg på.`;
     renderHandover();
   } catch (error) {
     elements.guardStatus.textContent = "Kunne ikke laste navn fra vaktlisten.";
