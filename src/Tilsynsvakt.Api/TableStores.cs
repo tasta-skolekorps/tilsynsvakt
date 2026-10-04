@@ -12,7 +12,7 @@ public interface IStoreLifecycle
     Task CheckReadyAsync(CancellationToken ct);
 }
 
-public sealed class TableStores : IStores, IStoreLifecycle
+public sealed partial class TableStores : IStores, IStoreLifecycle
 {
     private const string PartitionKey = "roster";
     private const string CounterRowKey = "META_GUARD_ID";

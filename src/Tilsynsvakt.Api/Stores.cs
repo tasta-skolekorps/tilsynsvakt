@@ -11,6 +11,10 @@ public interface IStores
     Task<SignUpResult> SignUpAsync(DateOnly date, int guardId, CancellationToken ct);
     Task<ShiftDto> ReplaceAsync(DateOnly date, int guardId, int expectedGuardId, CancellationToken ct);
     Task DeleteAsync(DateOnly date, int? expectedGuardId, CancellationToken ct);
+    Task<IReadOnlyList<SwapRequestDto>> GetSwapRequestsAsync(CancellationToken ct);
+    Task<SwapRequestDto> CreateSwapRequestAsync(DateOnly date, DateOnly targetDate, int requesterId, CancellationToken ct);
+    Task AcceptSwapRequestAsync(DateOnly date, DateOnly targetDate, int guardId, CancellationToken ct);
+    Task DeleteSwapRequestAsync(DateOnly date, DateOnly targetDate, int guardId, CancellationToken ct);
     Task<AdminGuardDto> CreateGuardAsync(string? name, string? phone, CancellationToken ct);
     Task<AdminGuardDto> UpdateGuardAsync(int id, string? name, string? phone, bool? active, CancellationToken ct);
     Task DeactivateGuardAsync(int id, CancellationToken ct);

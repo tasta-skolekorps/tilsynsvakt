@@ -19,6 +19,8 @@ const state = {
   guardList: [],
   selectedGuardId: null,
   shifts: [],
+  swaps: [],
+  swapTarget: null,
   usagePlan: null,
   contacts: [],
   staticAvailable: false,
@@ -39,8 +41,11 @@ const elements = {
   rosterHandover: document.querySelector("#roster-handover"),
   myShifts: document.querySelector("#my-shifts"),
   allShifts: document.querySelector("#all-shifts"),
-  signupShifts: document.querySelector("#signup-shifts"),
-  openShiftSelect: document.querySelector("#open-shift-select"),
+  swapRequests: document.querySelector("#swap-requests"),
+  swapRequestsArea: document.querySelector("#swap-requests-area"),
+  swapForm: document.querySelector("#swap-form"),
+  swapSummary: document.querySelector("#swap-summary"),
+  swapOwnShift: document.querySelector("#swap-own-shift"),
   contactList: document.querySelector("#contact-list"),
   checklistItems: document.querySelector("#checklist-items"),
   checklistProgress: document.querySelector("#checklist-progress"),
@@ -220,7 +225,7 @@ async function loadGuards() {
 async function loadShifts({ message } = {}) {
   const from = todayIso();
   const until = new Date(dateFromIso(from).getTime() + 89 * 86400000).toISOString().slice(0, 10);
-  for (const container of [elements.myShifts, elements.allShifts, elements.signupShifts]) {
+  for (const container of [elements.myShifts, elements.allShifts]) {
     container.replaceChildren(node("p", "loading", "Laster vaktliste …"));
   }
   try {
@@ -228,14 +233,12 @@ async function loadShifts({ message } = {}) {
     state.shifts = result.shifts;
     state.apiAvailable = true;
     renderShifts();
-    renderSignupOptions();
     renderHandover();
     if (message) showNotice(message, "success");
   } catch (error) {
-    for (const container of [elements.myShifts, elements.allShifts, elements.signupShifts]) {
+    for (const container of [elements.myShifts, elements.allShifts]) {
       container.replaceChildren(node("p", "empty-state", error.message));
     }
-    elements.openShiftSelect.replaceChildren(new Option("Vaktlisten er ikke tilgjengelig", ""));
     showNotice(error.message, "error");
   }
 }
@@ -330,18 +333,15 @@ function renderShifts() {
   const mine = guard ? assigned.filter(shift => shift.guard?.id === guard.id) : [];
   elements.myShifts.replaceChildren();
   elements.allShifts.replaceChildren();
-  elements.signupShifts.replaceChildren();
   if (!guard) elements.myShifts.append(node("p", "empty-state", "Velg navnet ditt øverst for å se vaktene dine."));
   else if (!mine.length) elements.myShifts.append(node("p", "empty-state", "Du har ingen vakter i den viste perioden."));
   else for (const shift of mine) elements.myShifts.append(shiftCard(shift, true));
 
   if (!state.shifts.length) {
     elements.allShifts.append(node("p", "empty-state", "Ingen vakter i den viste perioden."));
-    elements.signupShifts.append(node("p", "empty-state", "Ingen vakter i den viste perioden."));
     return;
   }
   elements.allShifts.append(weekTable());
-  for (const shift of state.shifts) elements.signupShifts.append(shiftCard(shift, false, true));
 }
 
 function isoWeek(value) {
@@ -398,9 +398,11 @@ function weekTable() {
       } else if (shift.status === "open") {
         open++;
         cell.className = "week-open";
-        const link = node("a", "", "Ledig");
-        link.href = "#pamelding";
-        cell.append(link);
+        const signup = node("button", "button button-primary signup-inline", "Meld på");
+        signup.type = "button";
+        signup.setAttribute("aria-label", `Meld deg på vakten ${formatDate(shift.date)}`);
+        signup.addEventListener("click", () => signUp(shift));
+        cell.append(signup);
       } else {
         cell.textContent = shift.guard.name;
         if (shift.guard.id === state.selectedGuardId) cell.className = "week-mine";
@@ -419,7 +421,7 @@ function weekTable() {
   return wrap;
 }
 
-function shiftCard(shift, mineOnly, signupView = false) {
+function shiftCard(shift, mineOnly) {
   const card = node("article", `shift-card${shift.status === "open" ? " shift-open" : ""}`);
   const header = node("div", "shift-card-header");
   const date = node("div", "shift-date");
@@ -429,7 +431,7 @@ function shiftCard(shift, mineOnly, signupView = false) {
   if (shift.guard) card.append(node("p", "shift-guard", shift.guard.name));
   if (shift.status === "open") {
     card.append(node("p", "muted", "Ingen tilsynsvakt er påmeldt."));
-  } else if (!signupView || shift.guard?.id === state.selectedGuardId) {
+  } else {
     const actions = node("div", "shift-actions");
     actions.append(makeReplaceControl(shift));
     const cancel = node("button", "button button-danger", "Avmeld");
@@ -437,8 +439,6 @@ function shiftCard(shift, mineOnly, signupView = false) {
     cancel.addEventListener("click", () => cancelShift(shift));
     actions.append(cancel);
     card.append(actions);
-  } else {
-    card.append(node("p", "muted", "Vakten er allerede tatt."));
   }
   if (mineOnly && shift.guard) card.dataset.mine = "true";
   return card;
@@ -465,6 +465,18 @@ function makeReplaceControl(shift) {
     }, "Vakten er endret.");
   });
   return form;
+}
+
+async function signUp(shift) {
+  const guard = getSelectedGuard();
+  if (!guard) {
+    showNotice("Velg navnet ditt øverst før du melder deg på.", "error");
+    return;
+  }
+  await mutateShift(`/api/shifts/${shift.date}/signup`, {
+    method: "POST",
+    body: JSON.stringify({ guardId: guard.id })
+  }, "Du er meldt på vakten.");
 }
 
 async function cancelShift(shift) {
@@ -495,17 +507,7 @@ async function mutateShift(path, options, successMessage) {
   }
 }
 
-function renderSignupOptions() {
-  const openShifts = state.shifts.filter(shift => shift.status === "open");
-  elements.openShiftSelect.replaceChildren(new Option(openShifts.length ? "Velg dato" : "Ingen ledige vakter", ""));
-  for (const shift of openShifts) {
-    elements.openShiftSelect.add(new Option(`${formatDate(shift.date)} · ${weekdayNames[dayIndex(shift.date)]}`, shift.date));
-  }
-  elements.openShiftSelect.disabled = !getSelectedGuard() || openShifts.length === 0;
-}
-
 function renderHandover() {
-  renderSignupOptions();
   const guard = getSelectedGuard();
   if (!guard) {
     elements.nextHandover.textContent = "Velg navnet ditt for å se neste vakt.";
@@ -583,8 +585,9 @@ function updateChecklistProgress(count) {
 }
 
 function setView() {
-  const viewName = location.hash.slice(1) || "plan";
-  const allowed = ["plan", "vaktliste", "pamelding", "kontakter", "sjekkliste", "rapport"];
+  const hash = location.hash.slice(1);
+  const viewName = hash === "pamelding" ? "vaktliste" : hash || "plan";
+  const allowed = ["plan", "vaktliste", "kontakter", "sjekkliste", "rapport"];
   const selected = allowed.includes(viewName) ? viewName : "plan";
   for (const view of document.querySelectorAll(".view")) view.hidden = view.id !== `view-${selected}`;
   for (const link of document.querySelectorAll(".main-nav a")) {
@@ -596,6 +599,7 @@ function setView() {
 function setupForms() {
   elements.guardSelect.addEventListener("change", () => {
     state.selectedGuardId = Number(elements.guardSelect.value) || null;
+    state.swapTarget = null;
     const guard = getSelectedGuard();
     if (guard) localStorage.setItem(guardStorageKey, JSON.stringify({ id: guard.id, name: guard.name }));
     else localStorage.removeItem(guardStorageKey);
@@ -603,19 +607,20 @@ function setupForms() {
     renderShifts();
   });
 
-  document.querySelector("#signup-form").addEventListener("submit", async event => {
+  elements.swapForm.addEventListener("submit", async event => {
     event.preventDefault();
+    const target = state.swapTarget;
     const guard = getSelectedGuard();
-    const date = elements.openShiftSelect.value;
-    if (!guard) {
-      showNotice("Velg navnet ditt øverst før du melder deg på.", "error");
-      return;
-    }
-    if (!date) return;
-    await mutateShift(`/api/shifts/${date}/signup`, {
+    if (!target || !guard || !elements.swapOwnShift.value) return;
+    state.swapTarget = null;
+    await mutateShift("/api/swap-requests", {
       method: "POST",
-      body: JSON.stringify({ guardId: guard.id })
-    }, "Du er meldt på vakten.");
+      body: JSON.stringify({ date: elements.swapOwnShift.value, targetDate: target.date, requesterGuardId: guard.id })
+    }, `Forespørsel sendt til ${target.guard.name}. Byttet skjer når hen godkjenner i vaktlisten.`);
+  });
+  document.querySelector("#swap-cancel").addEventListener("click", () => {
+    state.swapTarget = null;
+    renderSwaps();
   });
 
   document.querySelector("#refresh-shifts").addEventListener("click", () => loadShifts());

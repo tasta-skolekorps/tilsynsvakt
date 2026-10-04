@@ -10,6 +10,7 @@ public sealed class InMemoryStores : IStores, IStoreLifecycle
     private readonly Dictionary<int, Guard> _guards = [];
     private readonly Dictionary<string, int> _guardIdsByName = new(StringComparer.Ordinal);
     private readonly Dictionary<DateOnly, ShiftDto> _shifts = [];
+    private readonly Dictionary<(DateOnly, DateOnly), SwapRequestDto> _swaps = [];
     private int _nextGuardId;
     private int _ready = 1;
 
@@ -160,6 +161,105 @@ public sealed class InMemoryStores : IStores, IStoreLifecycle
             }
 
             _shifts.Remove(date);
+            return Task.CompletedTask;
+        }
+    }
+
+    public Task<IReadOnlyList<SwapRequestDto>> GetSwapRequestsAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            return Task.FromResult<IReadOnlyList<SwapRequestDto>>(_swaps.Values.OrderBy(swap => swap.Date, StringComparer.Ordinal).ToArray());
+        }
+    }
+
+    public Task<SwapRequestDto> CreateSwapRequestAsync(DateOnly date, DateOnly targetDate, int requesterId, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var requester = FindActiveGuard(requesterId);
+            if (!_shifts.TryGetValue(date, out var own))
+            {
+                throw Errors.ShiftNotTaken();
+            }
+
+            if (own.Guard!.Id != requesterId)
+            {
+                throw Errors.ShiftChanged(own);
+            }
+
+            if (!_shifts.TryGetValue(targetDate, out var other))
+            {
+                throw Errors.ShiftNotTaken();
+            }
+
+            if (other.Guard!.Id == requesterId)
+            {
+                throw Errors.SwapInvalid();
+            }
+
+            var swap = new SwapRequestDto(ShiftDto.Iso(date), ShiftDto.Iso(targetDate), ToGuardDto(requester), other.Guard);
+            _swaps[(date, targetDate)] = swap;
+            return Task.FromResult(swap);
+        }
+    }
+
+    public Task AcceptSwapRequestAsync(DateOnly date, DateOnly targetDate, int guardId, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_swaps.TryGetValue((date, targetDate), out var swap))
+            {
+                throw Errors.SwapRequestNotFound();
+            }
+
+            if (swap.Target.Id != guardId)
+            {
+                throw Errors.SwapForbidden();
+            }
+
+            var requester = FindActiveGuard(swap.Requester.Id);
+            var target = FindActiveGuard(swap.Target.Id);
+            _shifts.TryGetValue(date, out var own);
+            _shifts.TryGetValue(targetDate, out var other);
+            if (own?.Guard?.Id != swap.Requester.Id)
+            {
+                _swaps.Remove((date, targetDate));
+                throw Errors.ShiftChanged(own ?? ShiftDto.From(date, null));
+            }
+
+            if (other?.Guard?.Id != swap.Target.Id)
+            {
+                _swaps.Remove((date, targetDate));
+                throw Errors.ShiftChanged(other ?? ShiftDto.From(targetDate, null));
+            }
+
+            _shifts[date] = ShiftDto.From(date, ToGuardDto(target));
+            _shifts[targetDate] = ShiftDto.From(targetDate, ToGuardDto(requester));
+            _swaps.Remove((date, targetDate));
+            return Task.CompletedTask;
+        }
+    }
+
+    public Task DeleteSwapRequestAsync(DateOnly date, DateOnly targetDate, int guardId, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_swaps.TryGetValue((date, targetDate), out var swap))
+            {
+                return Task.CompletedTask;
+            }
+
+            if (guardId != swap.Requester.Id && guardId != swap.Target.Id)
+            {
+                throw Errors.SwapForbidden();
+            }
+
+            _swaps.Remove((date, targetDate));
             return Task.CompletedTask;
         }
     }

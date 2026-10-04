@@ -90,6 +90,7 @@ app.MapOpenApi();
 app.MapScalarApiReference();
 app.MapGuardEndpoints();
 app.MapShiftEndpoints();
+app.MapSwapEndpoints();
 
 var adminApiKey = app.Configuration["Admin:ApiKey"];
 if (!string.IsNullOrWhiteSpace(adminApiKey))
