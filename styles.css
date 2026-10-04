@@ -434,3 +434,10 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .signoff-text { margin: 0 0 12px; line-height: 1.45; }
 
 .plan-warning:empty { display: none; }
+.admin-auth input, .admin-toolbar input, .admin-toolbar select, .admin-duty-form input, .admin-duty-form select {
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 17px;
+}
+.admin-auth input { width: 100%; box-sizing: border-box; border: var(--outline); border-radius: 0; background: var(--surface); color: var(--ink); }
+.admin-session { margin-bottom: 14px; }

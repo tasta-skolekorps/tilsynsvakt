@@ -1,4 +1,4 @@
-const cacheName = "tilsynsvakt-static-v5";
+const cacheName = "tilsynsvakt-static-v6";
 const appShell = [
   "./",
   "./index.html",

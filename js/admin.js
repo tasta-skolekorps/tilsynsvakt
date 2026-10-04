@@ -39,7 +39,7 @@ logoutButton.addEventListener("click", () => {
   sessionStorage.removeItem(storageKeys.username);
   sessionStorage.removeItem(storageKeys.password);
   passwordInput.value = "";
-  panel.hidden = true;
+  setLoggedIn(false);
   renderNotice("Du er logget ut.", "success");
 });
 
@@ -50,6 +50,11 @@ seasonForm.addEventListener("submit", async event => {
 
 if (hasCredentials()) {
   loadAdminDataSafely();
+}
+
+function setLoggedIn(loggedIn) {
+  panel.hidden = !loggedIn;
+  authForm.hidden = loggedIn;
 }
 
 async function loadAdminDataSafely() {
@@ -65,7 +70,7 @@ async function loadAdminDataSafely() {
 
 async function loadAdminData() {
   if (!hasCredentials()) {
-    panel.hidden = true;
+    setLoggedIn(false);
     renderNotice("Oppgi brukernavn og passord for å åpne administrasjonssiden.", "warm");
     return;
   }
@@ -78,7 +83,7 @@ async function loadAdminData() {
 
   state.guards = guards;
   state.duties = dutyList.duties;
-  panel.hidden = false;
+  setLoggedIn(true);
   renderTotals(dutyList.totals);
   renderDuties(dutyList.duties);
   seasonRangeElement.textContent = `${formatDate(dutyList.from)}–${formatDate(dutyList.to)}`;
@@ -96,7 +101,7 @@ async function apiFetch(path, options = {}) {
   });
 
   if (response.status === 401) {
-    panel.hidden = true;
+    setLoggedIn(false);
     renderNotice("Ugyldig brukernavn eller passord.", "error");
     throw new Error("Unauthorized");
   }
