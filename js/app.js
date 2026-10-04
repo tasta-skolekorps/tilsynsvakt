@@ -561,11 +561,17 @@ function renderSignoff() {
   const guard = getSelectedGuard();
   box.replaceChildren();
   box.classList.remove("is-signed");
+  box.hidden = false;
   if (!shift || shift.status !== "taken") {
-    box.hidden = true;
+    box.append(node("p", "signoff-text", shift
+      ? "Ingen er påmeldt dagens vakt ennå. Avslutning er bare mulig for den som har vakten i dag."
+      : "Det er ingen vakt i dag. Avslutning er bare mulig på en vaktdag."));
+    const idle = node("button", "button button-primary", "Avslutt vakten");
+    idle.type = "button";
+    idle.disabled = true;
+    box.append(idle);
     return;
   }
-  box.hidden = false;
   const own = Boolean(guard) && shift.guard.id === guard.id;
   const signed = shift.signedOffAt;
   const complete = todayChecklistState().length === checklist.length;
@@ -578,10 +584,9 @@ function renderSignoff() {
       ? `Dagens vakt er ${shift.guard.name}. Velg navnet ditt øverst for å avslutte vakten.`
       : complete ? "Alt er huket av. Du kan nå avslutte vakten." : "Huk av alle punktene for å kunne avslutte vakten."));
   }
-  if (!own) return;
   const button = node("button", `button ${signed ? "button-secondary" : "button-primary"}`, signed ? "Angre avslutning" : "Avslutt vakten");
   button.type = "button";
-  button.disabled = !signed && !complete;
+  button.disabled = !own || (!signed && !complete);
   button.addEventListener("click", () => signed
     ? mutateShift(`/api/shifts/${shift.date}/signoff?expectedGuardId=${guard.id}`, { method: "DELETE" }, "Avslutningen er angret.")
     : mutateShift(`/api/shifts/${shift.date}/signoff`, { method: "PUT", body: JSON.stringify({ guardId: guard.id }) }, "Vakten er avsluttet. Takk for innsatsen!"));
