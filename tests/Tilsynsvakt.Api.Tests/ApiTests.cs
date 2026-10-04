@@ -31,6 +31,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Admin:Username", TestAdminUsername);
         builder.UseSetting("Admin:Password", TestAdminPassword);
         builder.UseSetting("Frontend:Origin", "https://example.github.io");
+        builder.UseSetting("Calendar:Closed:0:From", "2000-01-01");
+        builder.UseSetting("Calendar:Closed:0:To", "2000-01-02");
         builder.UseSetting("RateLimit:MutationsPerMinute", "10000");
         builder.UseSetting("RateLimit:AdminPerMinute", "10000");
 

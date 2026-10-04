@@ -417,6 +417,7 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .week-table th:last-child, .week-table td:last-child { border-right: 0; text-align: center; }
 .week-dates { color: var(--muted); }
 .week-board, .week-none { color: var(--muted); }
+.week-closed { color: var(--muted); font-style: italic; }
 .week-open { background: var(--red-soft); }
 .signup-inline { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .week-mine { background: var(--sun-soft); font-weight: 700; }

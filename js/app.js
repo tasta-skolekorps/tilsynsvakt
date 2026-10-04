@@ -269,16 +269,18 @@ function renderPlan() {
   }
   const isCurrentPlan = today >= plan.validFrom && today <= plan.validTo;
   elements.planWarning.textContent = isCurrentPlan ? "" : `Ukeplan ${plan.schoolYear} gjelder ${formatDate(plan.validFrom)}–${formatDate(plan.validTo)}. Ny plan er ikke publisert.`;
-  const entries = isCurrentPlan
+  const closed = isCurrentPlan ? closedPeriod(today) : null;
+  const entries = isCurrentPlan && !closed
     ? plan.entries.filter(entry => entry.day === (day || 7) && isEntryActive(entry, today)).sort((a, b) => a.start.localeCompare(b.start))
     : [];
   const now = entries.find(entry => minuteOfDay(entry.start) <= minutes && minutes < minuteOfDay(entry.end));
   const next = entries.filter(entry => minuteOfDay(entry.start) > minutes);
   elements.currentActivity.textContent = now ? now.group : "Ingen aktivitet registrert nå.";
   if (!isCurrentPlan) elements.currentActivity.textContent = "Plan for denne datoen er ikke publisert.";
+  if (closed) elements.currentActivity.textContent = `${closed.label} – ingen tilsynsvakt.`;
 
   if (entries.length === 0) {
-    elements.todaySchedule.append(node("li", "empty-state", isCurrentPlan ? "Ingen aktiviteter i gymsalen i dag." : "Denne datoen ligger utenfor den publiserte ukeplanen."));
+    elements.todaySchedule.append(node("li", "empty-state", closed ? `${closed.label}: ingen tilsynsvakt i dag.` : isCurrentPlan ? "Ingen aktiviteter i gymsalen i dag." : "Denne datoen ligger utenfor den publiserte ukeplanen."));
     return;
   }
   for (const entry of entries) {
@@ -345,6 +347,10 @@ function renderShifts() {
   elements.allShifts.append(weekTable());
 }
 
+function closedPeriod(date) {
+  return state.usagePlan?.closed?.find(period => date >= period.from && date <= period.to);
+}
+
 function isoWeek(value) {
   const date = dateFromIso(value);
   const day = (date.getUTCDay() + 6) % 7;
@@ -366,6 +372,16 @@ function weekTable() {
     if (!weeks.has(info.key)) weeks.set(info.key, { info, shifts: {} });
     weeks.get(info.key).shifts[dayIndex(shift.date)] = shift;
   }
+  const lastDate = state.shifts.at(-1)?.date ?? "";
+  for (const period of state.usagePlan?.closed ?? []) {
+    for (let time = dateFromIso(period.from).getTime(); time <= dateFromIso(period.to).getTime(); time += 86400000) {
+      const iso = new Date(time).toISOString().slice(0, 10);
+      if (iso < todayIso() || iso > lastDate) continue;
+      const info = isoWeek(iso);
+      if (!weeks.has(info.key)) weeks.set(info.key, { info, shifts: {} });
+    }
+  }
+  const sortedWeeks = [...weeks.values()].sort((a, b) => a.info.key.localeCompare(b.info.key));
   const days = [[1, "Mandag"], [2, "Tirsdag"], [3, "Onsdag"], [4, "Torsdag"]];
   const table = node("table", "week-table");
   table.append(node("caption", "sr-only", "Vaktliste per uke"));
@@ -381,7 +397,7 @@ function weekTable() {
   const body = node("tbody");
   const currentWeek = isoWeek(todayIso()).key;
   const format = date => formatDate(date.toISOString().slice(0, 10), { day: "2-digit", month: "2-digit" });
-  for (const { info, shifts } of weeks.values()) {
+  for (const { info, shifts } of sortedWeeks) {
     const row = node("tr", info.key === currentWeek ? "week-current" : "");
     const week = node("th", "", String(info.week));
     week.scope = "row";
@@ -390,7 +406,11 @@ function weekTable() {
     for (const [index] of days) {
       const shift = shifts[index];
       const cell = node("td");
-      if (index === 1) {
+      const closed = closedPeriod(new Date(info.monday.getTime() + (index - 1) * 86400000).toISOString().slice(0, 10));
+      if (closed) {
+        cell.className = "week-closed";
+        cell.textContent = closed.label;
+      } else if (index === 1) {
         cell.className = "week-board";
         cell.textContent = "Styrevakt";
       } else if (!shift) {

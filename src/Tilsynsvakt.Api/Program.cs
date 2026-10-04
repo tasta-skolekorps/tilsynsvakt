@@ -25,7 +25,7 @@ if (string.IsNullOrWhiteSpace(tablesConnection))
 builder.AddAzureTableServiceClient("tables", settings => settings.DisableHealthChecks = true);
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton(ShiftCalendar.FromConfiguration(builder.Configuration.GetSection("Calendar:Periods")));
+builder.Services.AddSingleton(ShiftCalendar.FromConfiguration(builder.Configuration.GetSection("Calendar:Periods"), builder.Configuration.GetSection("Calendar:Closed")));
 builder.Services.TryAddSingleton<TableStores>();
 builder.Services.TryAddSingleton<IStores>(sp => sp.GetRequiredService<TableStores>());
 builder.Services.TryAddSingleton<IStoreLifecycle>(sp => sp.GetRequiredService<TableStores>());

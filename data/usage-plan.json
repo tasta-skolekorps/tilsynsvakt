@@ -2,6 +2,7 @@
   "schoolYear": "2026–2027",
   "validFrom": "2026-09-01",
   "validTo": "2027-05-29",
+  "closed": [{ "from": "2026-10-05", "to": "2026-10-11", "label": "Høstferie" }],
   "entries": [
     { "day": 1, "start": "17:00", "end": "18:30", "group": "Tasta turn", "contactId": "turn", "periods": [{ "from": "09-01", "to": "11-28" }, { "from": "01-05", "to": "05-29" }] },
     { "day": 1, "start": "18:30", "end": "22:00", "group": "Tasta skolekorps", "contactId": "korps", "periods": [{ "from": "01-01", "to": "12-31" }] },
