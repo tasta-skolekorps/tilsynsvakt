@@ -8,7 +8,9 @@ const appShell = [
   "./data/usage-plan.json",
   "./data/contacts.json",
   "./data/guards.json",
-  "./favicon.svg"
+  "./favicon.svg",
+  "./pattern.svg",
+  "./header.svg"
 ];
 
 self.addEventListener("install", event => {
