@@ -45,29 +45,29 @@
         </div>
         <div class="shift-actions">
           <button class="button button-primary" type="submit">Logg inn</button>
-          <button class="button button-secondary" id="logout" type="button">Logg ut</button>
         </div>
         <p class="small-copy muted">Opplysningene lagres bare i denne nettleserfanen.</p>
       </form>
 
       <section id="admin-panel" hidden>
+        <div class="shift-actions admin-session">
+          <button class="button button-secondary" id="logout" type="button">Logg ut</button>
+        </div>
         <form id="season-form" class="admin-toolbar">
-          <label>
-            Sesong
-            <select id="season" name="season">
-              <option value="autumn">Høst–jul</option>
-              <option value="spring">Januar–juni</option>
-            </select>
-          </label>
-          <label>
-            År
-            <input id="year" name="year" type="number" min="2000" max="2100" inputmode="numeric" required>
-          </label>
-          <div class="shift-actions">
-            <button class="button button-primary" type="submit">Last inn</button>
+          <fieldset class="season-picker">
+            <legend>Sesong</legend>
+            <label class="season-option"><input type="radio" name="season" value="autumn" checked><span>Høst–jul</span></label>
+            <label class="season-option"><input type="radio" name="season" value="spring"><span>Januar–juni</span></label>
+          </fieldset>
+          <div class="year-picker">
+            <label for="year">År</label>
+            <div class="year-stepper">
+              <button class="button button-secondary" id="year-prev" type="button" aria-label="Forrige år">‹</button>
+              <input id="year" name="year" type="number" min="2000" max="2100" inputmode="numeric" required>
+              <button class="button button-secondary" id="year-next" type="button" aria-label="Neste år">›</button>
+            </div>
           </div>
         </form>
-
         <div class="section-heading">
           <h2>Summering per tilsynsvakt</h2>
           <span id="season-range" class="muted"></span>

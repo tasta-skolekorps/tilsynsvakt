@@ -268,7 +268,7 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
   .shift-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #view-vaktliste .handover-panel { grid-template-columns: 1fr; }
   .admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-toolbar { grid-template-columns: repeat(3, minmax(0, max-content)); align-items: end; }
+  .admin-toolbar { grid-template-columns: repeat(2, minmax(0, max-content)); align-items: end; gap: 24px; }
   .admin-total-list, .admin-duty-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
@@ -434,3 +434,34 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .signoff-text { margin: 0 0 12px; line-height: 1.45; }
 
 .plan-warning:empty { display: none; }
+.admin-auth input, .admin-toolbar input, .admin-toolbar select, .admin-duty-form input, .admin-duty-form select {
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 17px;
+}
+.admin-auth input { width: 100%; box-sizing: border-box; border: var(--outline); border-radius: 0; background: var(--surface); color: var(--ink); }
+.admin-session { margin-bottom: 14px; }
+
+.season-picker { display: flex; gap: 0; padding: 0; margin: 0; border: 0; }
+.season-picker legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 750; }
+.season-option { display: block; flex: 1; }
+.season-option input { position: absolute; opacity: 0; pointer-events: none; }
+.season-option span {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 0 18px;
+  font-weight: 750;
+  color: var(--navy-deep);
+  background: var(--surface);
+  border: var(--outline);
+  cursor: pointer;
+}
+.season-option + .season-option span { border-left-width: 0; }
+.season-option input:checked + span { background: var(--sun); box-shadow: inset 0 -4px 0 var(--red); }
+.season-option input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+.year-picker { display: grid; gap: 6px; font-size: 13px; font-weight: 750; }
+.year-stepper { display: flex; }
+.year-stepper input { width: 96px; min-height: 52px; box-sizing: border-box; text-align: center; font-size: 17px; border: var(--outline); border-radius: 0; background: var(--surface); color: var(--ink); -moz-appearance: textfield; }
+.year-stepper input::-webkit-outer-spin-button, .year-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.year-stepper .button { min-width: 52px; min-height: 52px; font-size: 22px; }

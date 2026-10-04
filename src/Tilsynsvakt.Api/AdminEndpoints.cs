@@ -7,7 +7,9 @@ namespace Tilsynsvakt.Api;
 public static class AdminEndpoints
 {
     private static readonly TimeOnly ScheduledStart = new(16, 45);
-    private static readonly TimeOnly ScheduledEnd = new(22, 0);
+    // From the usage plan: Wednesday and Thursday end at 21:00 (21:00-22:00 is free); Monday and Tuesday run to 22:00.
+    private static TimeOnly ScheduledEndFor(DateOnly date) =>
+        date.DayOfWeek is DayOfWeek.Wednesday or DayOfWeek.Thursday ? new TimeOnly(21, 0) : new TimeOnly(22, 0);
 
     public static void MapAdminEndpoints(this WebApplication app, string? apiKey, string? username, string? password)
     {
@@ -235,7 +237,7 @@ public static class AdminEndpoints
     private static AdminDutyDto ToAdminDuty(ShiftDto shift)
     {
         var recordedCheckOut = ParseSignedOffAt(shift.SignedOffAt);
-        var endTime = recordedCheckOut is null ? ScheduledEnd : Clock.ToLocalTime(recordedCheckOut.Value);
+        var endTime = recordedCheckOut is null ? ScheduledEndFor(Req.Date(shift.Date)) : Clock.ToLocalTime(recordedCheckOut.Value);
         var durationHours = RoundUpToHalfHour((decimal)(endTime.ToTimeSpan() - ScheduledStart.ToTimeSpan()).TotalHours);
 
         return new AdminDutyDto(
