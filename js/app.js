@@ -467,15 +467,13 @@ function shiftCard(shift, mineOnly) {
 
 function makeReplaceControl(shift) {
   const form = node("form", "replace-form");
-  const label = node("label", "sr-only", `Velg tilsynsvakt for ${formatDate(shift.date)}`);
   const select = node("select", "guard-target");
   select.setAttribute("aria-label", `Ny tilsynsvakt for ${formatDate(shift.date)}`);
   const selectedId = shift.guard?.id;
   for (const guard of state.guardList) select.add(new Option(guard.name, String(guard.id), false, guard.id === selectedId));
   const button = node("button", "button button-secondary", "Endre vakt");
   button.type = "submit";
-  label.append(select);
-  form.append(label, button);
+  form.append(select, button);
   form.addEventListener("submit", async event => {
     event.preventDefault();
     if (!selectedId) return;
