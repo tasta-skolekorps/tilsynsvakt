@@ -26,11 +26,17 @@ $today = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, "Cent
 function Invoke-Api($method, $path, $body) {
     $args = @{ Method = $method; Uri = "$ApiUrl$path"; Headers = $headers; ContentType = "application/json; charset=utf-8" }
     if ($body) { $args.Body = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress)) }
-    Invoke-RestMethod @args
+    for ($attempt = 1; ; $attempt++) {
+        try { return Invoke-RestMethod @args }
+        catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 429 -or $attempt -ge 10) { throw }
+            Start-Sleep -Seconds 15
+        }
+    }
 }
 
 $existing = @{}
-foreach ($g in Invoke-Api GET "/api/admin/guards") { $existing[$g.name.ToLowerInvariant()] = $g }
+Invoke-Api GET "/api/admin/guards" | ForEach-Object { $_ } | ForEach-Object { $existing[$_.name.ToLowerInvariant()] = $_ }
 
 $ids = @{}
 foreach ($guard in $guards) {
