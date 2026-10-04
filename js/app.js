@@ -198,9 +198,12 @@ async function loadGuards() {
       option.disabled = !entry.api;
       elements.guardSelect.add(option);
     }
-    if (state.guardList.some(guard => guard.id === savedId)) {
-      state.selectedGuardId = savedId;
-      elements.guardSelect.value = String(savedId);
+    const match = state.guardList.find(guard => guard.id === savedId)
+      ?? (saved?.name ? state.guardList.find(guard => normalize(guard.name) === normalize(String(saved.name))) : null);
+    if (match) {
+      state.selectedGuardId = match.id;
+      elements.guardSelect.value = String(match.id);
+      localStorage.setItem(guardStorageKey, JSON.stringify({ id: match.id, name: match.name }));
     } else if (saved) {
       localStorage.removeItem(guardStorageKey);
     }
