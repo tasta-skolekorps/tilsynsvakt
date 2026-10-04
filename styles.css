@@ -431,3 +431,5 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .signoff { margin-top: 18px; padding: 14px; background: var(--surface); border: 1px solid var(--line); }
 .signoff.is-signed { background: var(--teal-soft); }
 .signoff-text { margin: 0 0 12px; line-height: 1.45; }
+
+.plan-warning:empty { display: none; }
