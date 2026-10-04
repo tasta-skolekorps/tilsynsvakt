@@ -625,6 +625,7 @@ function updateChecklistProgress(count) {
 }
 
 function setView() {
+  clearNotice();
   const hash = location.hash.slice(1);
   const viewName = hash === "pamelding" ? "vaktliste" : hash || "plan";
   const allowed = ["plan", "vaktliste", "kontakter", "sjekkliste", "rapport"];
