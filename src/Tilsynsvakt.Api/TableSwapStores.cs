@@ -81,8 +81,8 @@ public sealed partial class TableStores
                         CloneGuard(requester, active: true, version: ReadInt32(requester, "Version") + 1), requester.ETag),
                     new TableTransactionAction(TableTransactionActionType.UpdateReplace,
                         CloneGuard(target, active: true, version: ReadInt32(target, "Version") + 1), target.ETag),
-                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(date, target), own.ETag),
-                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(targetDate, requester), other.ETag),
+                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(date, target, null), own.ETag),
+                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(targetDate, requester, null), other.ETag),
                     new TableTransactionAction(TableTransactionActionType.Delete, requestEntity, requestEntity.ETag),
                 ], ct);
                 return;

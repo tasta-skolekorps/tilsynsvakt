@@ -53,6 +53,9 @@ public static class Errors
     public static ApiException NotAShiftDay(int status) =>
         new(status, "not_a_shift_day", "Ikke en vaktdag", "Det er bare vakter tirsdag til torsdag i skoleperiodene.");
 
+    public static ApiException NotAnAdminDutyDay(int status) =>
+        new(status, "not_an_admin_duty_day", "Ikke en gyldig vaktdag", "Administrasjon kan bare endre vakter mandag til torsdag i skoleperiodene.");
+
     public static ApiException DateInPast() =>
         new(422, "date_in_past", "Dato i fortiden", "Vakter i fortiden kan ikke endres.");
 
@@ -91,6 +94,12 @@ public static class Errors
 
     public static ApiException Unauthorized() =>
         new(401, "unauthorized", "Ikke autorisert", "Manglende eller ugyldig nøkkel.");
+
+    public static ApiException InvalidSeason() =>
+        new(400, "invalid_season", "Ugyldig sesong", "Oppgi season=autumn eller season=spring og et gyldig årstall.");
+
+    public static ApiException InvalidTime() =>
+        new(400, "invalid_time", "Ugyldig klokkeslett", "Bruk klokkeslett på formen hh:mm.");
 
     public static ApiException UnsupportedMedia() =>
         new(415, "unsupported_media_type", "Ugyldig innholdstype", "Bruk Content-Type: application/json.");

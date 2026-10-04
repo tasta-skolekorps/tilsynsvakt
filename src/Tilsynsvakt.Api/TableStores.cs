@@ -96,18 +96,28 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
 
     public async Task<IReadOnlyList<ShiftDto>> GetShiftsAsync(DateOnly from, DateOnly to, ShiftCalendar calendar, CancellationToken ct)
     {
-        var filter = $"PartitionKey eq '{PartitionKey}' and RowKey ge '{ShiftRowKey(from)}' and RowKey le '{ShiftRowKey(to)}'";
-        var taken = new Dictionary<DateOnly, ShiftDto>();
-        await foreach (var entity in Table.QueryAsync<TableEntity>(filter, cancellationToken: ct))
-        {
-            var date = DateOnly.ParseExact(ReadString(entity, "Date"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-            taken[date] = ToShift(entity, date);
-        }
+        var taken = await ReadShiftRangeAsync(from, to, ct);
 
         var shifts = new List<ShiftDto>();
         for (var date = from; date <= to; date = date.AddDays(1))
         {
             if (calendar.IsShiftDay(date))
+            {
+                shifts.Add(taken.GetValueOrDefault(date) ?? ShiftDto.From(date, null));
+            }
+        }
+
+        return shifts;
+    }
+
+    public async Task<IReadOnlyList<ShiftDto>> GetAdminShiftsAsync(DateOnly from, DateOnly to, ShiftCalendar calendar, CancellationToken ct)
+    {
+        var taken = await ReadShiftRangeAsync(from, to, ct);
+
+        var shifts = new List<ShiftDto>();
+        for (var date = from; date <= to; date = date.AddDays(1))
+        {
+            if (calendar.IsAdminDutyDay(date))
             {
                 shifts.Add(taken.GetValueOrDefault(date) ?? ShiftDto.From(date, null));
             }
@@ -145,7 +155,7 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
                 await Table.SubmitTransactionAsync(
                 [
                     new TableTransactionAction(TableTransactionActionType.UpdateReplace, changedGuard, guard.ETag),
-                    new TableTransactionAction(TableTransactionActionType.Add, NewShiftEntity(date, guard)),
+                    new TableTransactionAction(TableTransactionActionType.Add, NewShiftEntity(date, guard, null)),
                 ], ct);
                 return new SignUpResult(ShiftDto.From(date, ToGuardDto(guard)), true);
             }
@@ -203,7 +213,7 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
                 await Table.SubmitTransactionAsync(
                 [
                     new TableTransactionAction(TableTransactionActionType.UpdateReplace, changedGuard, guard.ETag),
-                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(date, guard), currentEntity.ETag),
+                    new TableTransactionAction(TableTransactionActionType.UpdateReplace, NewShiftEntity(date, guard, null), currentEntity.ETag),
                 ], ct);
                 return ShiftDto.From(date, ToGuardDto(guard));
             }
@@ -232,6 +242,25 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
         }
 
         throw Errors.StorageBusy();
+    }
+
+    public async Task<ShiftDto> UpsertAdminShiftAsync(DateOnly date, int? guardId, DateTimeOffset? signedOffAt, CancellationToken ct)
+    {
+        if (guardId is null)
+        {
+            var current = await ReadEntityAsync(ShiftRowKey(date), ct);
+            if (current is not null)
+            {
+                await Table.DeleteEntityAsync(PartitionKey, ShiftRowKey(date), current.ETag, ct);
+            }
+
+            return ShiftDto.From(date, null);
+        }
+
+        var guard = await FindActiveGuardEntityAsync(guardId.Value, ct) ?? throw Errors.UnknownGuard();
+        var entity = NewShiftEntity(date, guard, signedOffAt);
+        await Table.UpsertEntityAsync(entity, TableUpdateMode.Replace, ct);
+        return ToShift(entity, date);
     }
 
     public async Task<ShiftDto> SetSignOffAsync(DateOnly date, int guardId, DateTimeOffset? signedOffAt, CancellationToken ct)
@@ -432,6 +461,19 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
     private Task<TableEntity?> FindGuardEntityAsync(int id, CancellationToken ct) =>
         ReadEntityAsync(GuardRowKey(id), ct);
 
+    private async Task<Dictionary<DateOnly, ShiftDto>> ReadShiftRangeAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var filter = $"PartitionKey eq '{PartitionKey}' and RowKey ge '{ShiftRowKey(from)}' and RowKey le '{ShiftRowKey(to)}'";
+        var taken = new Dictionary<DateOnly, ShiftDto>();
+        await foreach (var entity in Table.QueryAsync<TableEntity>(filter, cancellationToken: ct))
+        {
+            var date = DateOnly.ParseExact(ReadString(entity, "Date"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            taken[date] = ToShift(entity, date);
+        }
+
+        return taken;
+    }
+
     private async Task<TableEntity?> FindActiveGuardEntityAsync(int id, CancellationToken ct)
     {
         var guard = await FindGuardEntityAsync(id, ct);
@@ -444,12 +486,21 @@ public sealed partial class TableStores : IStores, IStoreLifecycle
         return response.HasValue ? response.Value : null;
     }
 
-    private static TableEntity NewShiftEntity(DateOnly date, TableEntity guard) =>
-        NewEntity(ShiftRowKey(date),
+    private static TableEntity NewShiftEntity(DateOnly date, TableEntity guard, DateTimeOffset? signedOffAt)
+    {
+        var entity = NewEntity(ShiftRowKey(date),
             ("Date", ShiftDto.Iso(date)),
             ("GuardId", ReadInt32(guard, "Id")),
             ("GuardName", ReadString(guard, "Name")),
             ("GuardPhone", ReadString(guard, "Phone")));
+
+        if (signedOffAt is not null)
+        {
+            entity["SignedOffAt"] = signedOffAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        return entity;
+    }
 
     private static TableEntity NewGuardEntity(int id, string name, string nameKey, string phone, bool active, int version) =>
         NewEntity(GuardRowKey(id),

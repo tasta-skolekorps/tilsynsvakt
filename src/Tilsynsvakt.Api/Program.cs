@@ -51,7 +51,7 @@ builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
     }
 
     policy.WithMethods("GET", "POST", "PUT", "DELETE")
-        .WithHeaders("Content-Type");
+        .WithHeaders("Content-Type", "Authorization");
 }));
 
 var mutationLimit = Math.Max(1, builder.Configuration.GetValue("RateLimit:MutationsPerMinute", 30));
@@ -93,9 +93,18 @@ app.MapShiftEndpoints();
 app.MapSwapEndpoints();
 
 var adminApiKey = app.Configuration["Admin:ApiKey"];
-if (!string.IsNullOrWhiteSpace(adminApiKey))
+var adminUsername = app.Configuration["Admin:Username"];
+var adminPassword = app.Configuration["Admin:Password"];
+if ((!string.IsNullOrWhiteSpace(adminUsername) && string.IsNullOrWhiteSpace(adminPassword))
+    || (string.IsNullOrWhiteSpace(adminUsername) && !string.IsNullOrWhiteSpace(adminPassword)))
 {
-    app.MapAdminEndpoints(adminApiKey);
+    throw new InvalidOperationException("Admin:Username and Admin:Password must either both be set or both be empty.");
+}
+
+if (!string.IsNullOrWhiteSpace(adminApiKey)
+    || (!string.IsNullOrWhiteSpace(adminUsername) && !string.IsNullOrWhiteSpace(adminPassword)))
+{
+    app.MapAdminEndpoints(adminApiKey, adminUsername, adminPassword);
 }
 
 await app.Services.GetRequiredService<IStoreLifecycle>().InitializeAsync(app.Lifetime.ApplicationStopping);
