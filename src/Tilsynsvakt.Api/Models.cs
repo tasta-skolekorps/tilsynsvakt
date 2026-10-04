@@ -21,6 +21,29 @@ public sealed record ShiftDto(string Date, string DayOfWeek, string Status, Guar
 /// <summary>A range of eligible shifts returned by the API.</summary>
 public sealed record ShiftListDto(string From, string To, IReadOnlyList<ShiftDto> Shifts);
 
+/// <summary>Administrative view of one duty.</summary>
+public sealed record AdminDutyDto(
+    string Date,
+    string DayOfWeek,
+    string Status,
+    GuardDto? Guard,
+    string ScheduledStart,
+    string EndTime,
+    bool HasRecordedCheckOut,
+    decimal DurationHours);
+
+/// <summary>Administrative totals for one guard within a season.</summary>
+public sealed record AdminDutyTotalDto(GuardDto Guard, int DutyCount, decimal TotalHours, int DutiesWithoutCheckOut);
+
+/// <summary>Administrative list of duties for one season.</summary>
+public sealed record AdminDutyListDto(
+    string Season,
+    int Year,
+    string From,
+    string To,
+    IReadOnlyList<AdminDutyDto> Duties,
+    IReadOnlyList<AdminDutyTotalDto> Totals);
+
 /// <summary>A pending request to swap two taken shifts, awaiting approval by the target guard.</summary>
 public sealed record SwapRequestDto(string Date, string TargetDate, GuardDto Requester, GuardDto Target);
 
@@ -44,3 +67,6 @@ public sealed record GuardBody(string? Name, string? Phone);
 
 /// <summary>Request body for updating an administrative guard entry.</summary>
 public sealed record AdminGuardBody(string? Name, string? Phone, bool? Active);
+
+/// <summary>Request body for adding, changing or clearing a duty in the administrative view.</summary>
+public sealed record AdminDutyBody(int? GuardId, string? CheckOutTime);

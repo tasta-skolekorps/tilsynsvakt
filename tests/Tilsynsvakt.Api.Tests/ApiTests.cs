@@ -14,7 +14,8 @@ namespace Tilsynsvakt.Api.Tests;
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    public const string TestAdminKey = "test-only-admin-key";
+    public const string TestAdminUsername = "admin";
+    public const string TestAdminPassword = "super-secret-test-password";
 
     public ApiFactory()
     {
@@ -27,7 +28,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("Admin:ApiKey", TestAdminKey);
+        builder.UseSetting("Admin:Username", TestAdminUsername);
+        builder.UseSetting("Admin:Password", TestAdminPassword);
         builder.UseSetting("Frontend:Origin", "https://example.github.io");
         builder.UseSetting("RateLimit:MutationsPerMinute", "10000");
         builder.UseSetting("RateLimit:AdminPerMinute", "10000");
@@ -35,7 +37,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
             new Dictionary<string, string?>
             {
-                ["Admin:ApiKey"] = TestAdminKey,
+                ["Admin:Username"] = TestAdminUsername,
+                ["Admin:Password"] = TestAdminPassword,
                 ["Frontend:Origin"] = "https://example.github.io",
                 ["RateLimit:MutationsPerMinute"] = "10000",
                 ["RateLimit:AdminPerMinute"] = "10000",
@@ -92,13 +95,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Admin_endpoints_require_the_configured_key_and_allow_creation()
+    public async Task Admin_endpoints_require_the_configured_credentials_and_allow_creation()
     {
         using var noKey = await _client.GetAsync("/api/admin/guards");
         await AssertProblemAsync(noKey, HttpStatusCode.Unauthorized, "unauthorized");
 
         using var wrongKeyRequest = new HttpRequestMessage(HttpMethod.Get, "/api/admin/guards");
-        wrongKeyRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "wrong-test-key");
+        ApplyAdminCredentials(wrongKeyRequest, "wrong", "credentials");
         using var wrongKey = await _client.SendAsync(wrongKeyRequest);
         await AssertProblemAsync(wrongKey, HttpStatusCode.Unauthorized, "unauthorized");
 
@@ -385,6 +388,68 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Admin_duties_include_board_mondays_and_round_duration_up()
+    {
+        var guard = await CreateGuardAsync();
+        await UpsertAdminDutyAsync("2026-09-07", guard.Id, "21:10");
+        await UpsertAdminDutyAsync("2026-09-08", guard.Id, null);
+
+        using var response = await SendAdminAsync(HttpMethod.Get, "/api/admin/duties?season=autumn&year=2026");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+
+        var duties = document.RootElement.GetProperty("duties").EnumerateArray().ToArray();
+        var monday = duties.Single(duty => duty.GetProperty("date").GetString() == "2026-09-07");
+        Assert.Equal("monday", monday.GetProperty("dayOfWeek").GetString());
+        Assert.Equal("21:10", monday.GetProperty("endTime").GetString());
+        Assert.True(monday.GetProperty("hasRecordedCheckOut").GetBoolean());
+        Assert.Equal(4.5m, monday.GetProperty("durationHours").GetDecimal());
+
+        var tuesday = duties.Single(duty => duty.GetProperty("date").GetString() == "2026-09-08");
+        Assert.Equal("22:00", tuesday.GetProperty("endTime").GetString());
+        Assert.False(tuesday.GetProperty("hasRecordedCheckOut").GetBoolean());
+        Assert.Equal(5.5m, tuesday.GetProperty("durationHours").GetDecimal());
+
+        var totals = document.RootElement.GetProperty("totals").EnumerateArray().ToArray();
+        var total = Assert.Single(totals);
+        Assert.Equal(guard.Id, total.GetProperty("guard").GetProperty("id").GetInt32());
+        Assert.Equal(2, total.GetProperty("dutyCount").GetInt32());
+        Assert.Equal(10.0m, total.GetProperty("totalHours").GetDecimal());
+        Assert.Equal(1, total.GetProperty("dutiesWithoutCheckOut").GetInt32());
+    }
+
+    [Fact]
+    public async Task Admin_can_reassign_clear_checkout_and_remove_any_duty()
+    {
+        var first = await CreateGuardAsync();
+        var second = await CreateGuardAsync();
+
+        using var created = await UpsertAdminDutyAsync("2026-09-07", first.Id, "21:40");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        using var replaced = await UpsertAdminDutyAsync("2026-09-07", second.Id, null);
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        using (var replacedDocument = await JsonDocument.ParseAsync(await replaced.Content.ReadAsStreamAsync()))
+        {
+            Assert.Equal(second.Id, replacedDocument.RootElement.GetProperty("guard").GetProperty("id").GetInt32());
+            Assert.Equal(JsonValueKind.Null, replacedDocument.RootElement.GetProperty("signedOffAt").ValueKind);
+        }
+
+        using var updated = await UpsertAdminDutyAsync("2026-09-07", second.Id, "20:50");
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        using (var updatedDocument = await JsonDocument.ParseAsync(await updated.Content.ReadAsStreamAsync()))
+        {
+            Assert.NotNull(updatedDocument.RootElement.GetProperty("signedOffAt").GetString());
+        }
+
+        using var removed = await UpsertAdminDutyAsync("2026-09-07", null, null);
+        Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
+        using var removedDocument = await JsonDocument.ParseAsync(await removed.Content.ReadAsStreamAsync());
+        Assert.Equal("open", removedDocument.RootElement.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, removedDocument.RootElement.GetProperty("guard").ValueKind);
+    }
+
+    [Fact]
     public async Task Cors_echoes_only_the_configured_origin()
     {
         var configuration = factory.Services.GetRequiredService<IConfiguration>();
@@ -486,7 +551,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         {
             Content = JsonContent.Create(new { name, phone = "400 00 000" }),
         };
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiFactory.TestAdminKey);
+        ApplyAdminCredentials(request);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
@@ -496,7 +561,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     private async Task DeactivateGuardAsync(int guardId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/admin/guards/{guardId}");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiFactory.TestAdminKey);
+        ApplyAdminCredentials(request);
         using var response = await _client.SendAsync(request);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -514,6 +579,30 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     private Task<HttpResponseMessage> PutReplaceAsync(DateOnly date, int guardId, int expectedGuardId) =>
         _client.PutAsync($"/api/shifts/{date:yyyy-MM-dd}", JsonContent.Create(new { guardId, expectedGuardId }));
+
+    private async Task<HttpResponseMessage> UpsertAdminDutyAsync(string date, int? guardId, string? checkOutTime)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/admin/duties/{date}")
+        {
+            Content = JsonContent.Create(new { guardId, checkOutTime }),
+        };
+        ApplyAdminCredentials(request);
+        return await _client.SendAsync(request);
+    }
+
+    private async Task<HttpResponseMessage> SendAdminAsync(HttpMethod method, string path)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        ApplyAdminCredentials(request);
+        return await _client.SendAsync(request);
+    }
+
+    private static void ApplyAdminCredentials(HttpRequestMessage request, string? username = null, string? password = null)
+    {
+        var raw = $"{username ?? ApiFactory.TestAdminUsername}:{password ?? ApiFactory.TestAdminPassword}";
+        var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", encoded);
+    }
 
     private static async Task<JsonDocument> AssertProblemAsync(HttpResponseMessage response, HttpStatusCode status, string code)
     {

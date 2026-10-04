@@ -213,6 +213,43 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
 .notice-error { color: #6f271c; background: #f7e7dc; border-color: var(--red); }
 .notice-success { color: #174a35; background: #e1eedf; border-color: var(--teal); }
 .notice-warm { color: #69420f; background: #f6edcf; border-color: #9e7425; }
+.admin-shell { padding-top: 22px; }
+.admin-auth, .admin-toolbar, .admin-duty-card, .admin-total-card {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.admin-grid, .admin-toolbar { display: grid; gap: 12px; }
+.admin-auth label, .admin-toolbar label, .admin-duty-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 750;
+}
+.admin-total-list, .admin-duty-list { display: grid; gap: 12px; }
+.admin-total-card p, .admin-duty-card p { margin: 6px 0 0; }
+.admin-duty-card { display: grid; gap: 12px; }
+.admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.admin-duty-form { display: grid; gap: 10px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.badge-actual { color: #174a35; background: #e1eedf; }
+.badge-planned { color: #69420f; background: #f6edcf; }
 .incident-form { display: grid; gap: 8px; max-width: 600px; }
 .incident-form label:not(:first-child) { margin-top: 10px; }
 .incident-form textarea { resize: vertical; }
@@ -230,6 +267,9 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
   .schedule-item { grid-template-columns: 100px minmax(0, 1fr) auto; padding-inline: 16px; }
   .shift-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #view-vaktliste .handover-panel { grid-template-columns: 1fr; }
+  .admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-toolbar { grid-template-columns: repeat(3, minmax(0, max-content)); align-items: end; }
+  .admin-total-list, .admin-duty-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .site-header, .main-nav, main, .site-footer { width: min(100% - 24px, 920px); }
@@ -258,6 +298,8 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
   .contact-row { align-items: flex-start; flex-direction: column; }
   .contact-actions { width: 100%; }
   .contact-action:first-child { flex: 1; }
+  .admin-toolbar { grid-template-columns: 1fr; }
+  .admin-total-list, .admin-duty-list { grid-template-columns: 1fr; }
   .replace-form { flex: 1; }
   .replace-form select { max-width: 100%; }
   .site-footer { flex-direction: column; }

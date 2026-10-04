@@ -22,6 +22,18 @@ if (!string.IsNullOrWhiteSpace(adminApiKey))
     api.WithEnvironment("Admin__ApiKey", adminApiKey);
 }
 
+var adminUsername = builder.Configuration["Admin:Username"];
+var adminPassword = builder.Configuration["Admin:Password"];
+if (!string.IsNullOrWhiteSpace(adminUsername))
+{
+    api.WithEnvironment("Admin__Username", adminUsername);
+}
+
+if (!string.IsNullOrWhiteSpace(adminPassword))
+{
+    api.WithEnvironment("Admin__Password", adminPassword);
+}
+
 if (builder.ExecutionContext.IsPublishMode)
 {
     // Aspire grants the API's managed identity Table Data Contributor, which is enough to create the table.

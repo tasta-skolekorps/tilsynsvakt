@@ -82,6 +82,24 @@ public sealed class InMemoryStores : IStores, IStoreLifecycle
         }
     }
 
+    public Task<IReadOnlyList<ShiftDto>> GetAdminShiftsAsync(DateOnly from, DateOnly to, ShiftCalendar calendar, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var shifts = new List<ShiftDto>();
+            for (var date = from; date <= to; date = date.AddDays(1))
+            {
+                if (calendar.IsAdminDutyDay(date))
+                {
+                    shifts.Add(_shifts.GetValueOrDefault(date) ?? ShiftDto.From(date, null));
+                }
+            }
+
+            return Task.FromResult<IReadOnlyList<ShiftDto>>(shifts);
+        }
+    }
+
     public Task<ShiftDto?> GetShiftAsync(DateOnly date, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -156,6 +174,25 @@ public sealed class InMemoryStores : IStores, IStoreLifecycle
             }
 
             var updated = current with { SignedOffAt = signedOffAt?.ToUniversalTime().ToString("O") };
+            _shifts[date] = updated;
+            return Task.FromResult(updated);
+        }
+    }
+
+    public Task<ShiftDto> UpsertAdminShiftAsync(DateOnly date, int? guardId, DateTimeOffset? signedOffAt, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (guardId is null)
+            {
+                _shifts.Remove(date);
+                return Task.FromResult(ShiftDto.From(date, null));
+            }
+
+            var guard = FindActiveGuard(guardId.Value);
+            var updated = ShiftDto.From(date, ToGuardDto(guard))
+                with { SignedOffAt = signedOffAt?.ToUniversalTime().ToString("O") };
             _shifts[date] = updated;
             return Task.FromResult(updated);
         }
