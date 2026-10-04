@@ -269,7 +269,7 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
 }
 
 /* Cubist theme */
-body { background-image: url("./pattern.svg"); background-size: 320px 320px; background-attachment: fixed; }
+body { background-image: url("./pattern.svg"); background-size: 320px 320px; background-attachment: scroll; }
 a { color: var(--navy); }
 .page-heading h1, .section-heading h2, .subheading, .checklist-heading, .now-title, .contact-detail h2, .incident-preview h2 { font-weight: 400; letter-spacing: .01em; text-transform: uppercase; }
 .page-heading h1 { font-size: clamp(30px, 8vw, 44px); }
@@ -382,3 +382,4 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .week-open a { color: #a02d17; font-weight: 700; }
 .week-mine { background: var(--sun-soft); font-weight: 700; }
 .week-current > * { box-shadow: inset 0 3px 0 var(--red), inset 0 -3px 0 var(--red); }
+
