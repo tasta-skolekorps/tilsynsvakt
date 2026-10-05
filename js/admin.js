@@ -100,7 +100,6 @@ async function loadAdminData() {
   renderTotals(dutyList.totals);
   renderDuties(dutyList.duties);
   seasonRangeElement.textContent = `${formatDate(dutyList.from)}–${formatDate(dutyList.to)}`;
-  renderNotice("Administrasjonssiden er oppdatert.", "success");
 }
 
 async function apiFetch(path, options = {}) {
