@@ -1,5 +1,6 @@
 const config = window.TILSYNSVAKT_CONFIG ?? {};
 const apiBaseUrl = (config.apiBaseUrl ?? "").replace(/\/$/, "");
+const requestTimeoutMs = 15000;
 const storageKeys = {
   username: "tilsynsvakt.admin.username",
   password: "tilsynsvakt.admin.password",
@@ -8,6 +9,7 @@ const storageKeys = {
 const state = {
   guards: [],
   duties: [],
+  loadVersion: 0,
 };
 
 const authForm = document.querySelector("#auth-form");
@@ -22,6 +24,38 @@ const seasonInputs = document.querySelectorAll("input[name=season]");
 const yearInput = document.querySelector("#year");
 const usernameInput = document.querySelector("#username");
 const passwordInput = document.querySelector("#password");
+const tabs = [...document.querySelectorAll('.admin-tabs [role="tab"]')];
+
+function selectTab(hash, focus = false) {
+  const selectedId = hash === "#vakter" ? "vakter" : "summering";
+  tabs.forEach(tab => {
+    const selected = tab.getAttribute("aria-controls") === selectedId;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = !selected;
+    if (selected && focus) tab.focus();
+  });
+}
+
+tabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => {
+    window.location.hash = tab.getAttribute("aria-controls");
+    selectTab(window.location.hash);
+  });
+  tab.addEventListener("keydown", event => {
+    let nextIndex;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (index + tabs.length - 1) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    window.location.hash = tabs[nextIndex].getAttribute("aria-controls");
+    selectTab(window.location.hash, true);
+  });
+});
+window.addEventListener("hashchange", () => selectTab(window.location.hash));
+selectTab(window.location.hash);
 
 const defaultSeason = getDefaultSeason(new Date());
 seasonInputs.forEach(input => { input.checked = input.value === defaultSeason.season; });
@@ -36,6 +70,7 @@ authForm.addEventListener("submit", async event => {
 });
 
 logoutButton.addEventListener("click", () => {
+  state.loadVersion++;
   sessionStorage.removeItem(storageKeys.username);
   sessionStorage.removeItem(storageKeys.password);
   passwordInput.value = "";
@@ -71,17 +106,25 @@ function stepYear(delta) {
 }
 
 async function loadAdminDataSafely() {
+  const version = ++state.loadVersion;
   try {
-    await loadAdminData();
+    await loadAdminData(version);
   } catch (error) {
-    console.error(error);
-    if (error.message !== "Unauthorized") {
-      renderNotice("Kunne ikke laste administrasjonssiden. Prøv igjen.", "error");
+    if (version !== state.loadVersion) return;
+    totalsElement.innerHTML = '<p class="empty-state">Kunne ikke laste summeringen. Prøv igjen.</p>';
+    dutiesElement.innerHTML = '<p class="empty-state">Kunne ikke laste vaktene. Prøv igjen.</p>';
+    if (error.message === "Unauthorized") {
+      setLoggedIn(false);
+      renderNotice("Ugyldig brukernavn eller passord.", "error");
+    } else {
+      renderNotice(error.name === "TimeoutError"
+        ? "Forespørselen tok for lang tid. Prøv igjen."
+        : "Kunne ikke laste administrasjonssiden. Prøv igjen.", "error");
     }
   }
 }
 
-async function loadAdminData() {
+async function loadAdminData(version) {
   if (!hasCredentials()) {
     setLoggedIn(false);
     renderNotice("Oppgi brukernavn og passord for å åpne administrasjonssiden.", "warm");
@@ -89,10 +132,13 @@ async function loadAdminData() {
   }
 
   renderNotice("Laster …");
+  totalsElement.innerHTML = '<p class="loading">Laster summering …</p>';
+  dutiesElement.innerHTML = '<p class="loading">Laster vakter …</p>';
   const [guards, dutyList] = await Promise.all([
     apiFetch("/api/admin/guards"),
     apiFetch(`/api/admin/duties?season=${encodeURIComponent(selectedSeason())}&year=${encodeURIComponent(yearInput.value)}`),
   ]);
+  if (version !== state.loadVersion) return;
 
   state.guards = guards;
   state.duties = dutyList.duties;
@@ -100,11 +146,33 @@ async function loadAdminData() {
   renderTotals(dutyList.totals);
   renderDuties(dutyList.duties);
   seasonRangeElement.textContent = `${formatDate(dutyList.from)}–${formatDate(dutyList.to)}`;
+  renderNotice("");
 }
 
 async function apiFetch(path, options = {}) {
+  const controller = new AbortController();
+  let timeoutId;
+  try {
+    return await Promise.race([
+      fetchResponse(path, options, controller.signal),
+      new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error("Forespørselen tok for lang tid. Prøv igjen.");
+          error.name = "TimeoutError";
+          reject(error);
+          controller.abort();
+        }, requestTimeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchResponse(path, options, signal) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
+    signal,
     headers: {
       "Content-Type": "application/json",
       "Authorization": getAuthorizationHeader(),
@@ -113,8 +181,6 @@ async function apiFetch(path, options = {}) {
   });
 
   if (response.status === 401) {
-    setLoggedIn(false);
-    renderNotice("Ugyldig brukernavn eller passord.", "error");
     throw new Error("Unauthorized");
   }
 
@@ -220,9 +286,12 @@ function renderDuties(duties) {
             checkOutTime: guardId ? checkOutTime : null,
           }),
         });
-        await loadAdminData();
+        await loadAdminDataSafely();
       } catch (error) {
-        renderNotice(error.message || "Kunne ikke lagre vakten.", "error");
+        if (error.message === "Unauthorized") setLoggedIn(false);
+        renderNotice(error.message === "Unauthorized"
+          ? "Ugyldig brukernavn eller passord."
+          : "Kunne ikke lagre vakten. Prøv igjen.", "error");
       }
     });
   });
