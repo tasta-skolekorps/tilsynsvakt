@@ -68,6 +68,11 @@
             </div>
           </div>
         </form>
+        <div class="admin-tabs" role="tablist" aria-label="Administrasjon">
+          <button id="tab-summering" type="button" role="tab" aria-controls="summering" aria-selected="true" tabindex="0">Summering</button>
+          <button id="tab-vakter" type="button" role="tab" aria-controls="vakter" aria-selected="false" tabindex="-1">Vakter</button>
+        </div>
+        <section id="summering" role="tabpanel" aria-labelledby="tab-summering" tabindex="0">
         <div class="section-heading">
           <h2 id="totals-heading">Summering per tilsynsvakt</h2>
           <span id="season-range" class="muted"></span>
@@ -75,11 +80,14 @@
         <div id="totals" aria-live="polite">
           <p class="loading">Laster summering …</p>
         </div>
+        </section>
 
-        <h2 class="subheading">Alle vakter</h2>
+        <section id="vakter" role="tabpanel" aria-labelledby="tab-vakter" tabindex="0" hidden>
+        <h2 id="duties-heading" class="subheading">Alle vakter</h2>
         <div id="duties" class="admin-duty-list" aria-live="polite">
           <p class="loading">Laster vakter …</p>
         </div>
+        </section>
       </section>
     </section>
   </main>

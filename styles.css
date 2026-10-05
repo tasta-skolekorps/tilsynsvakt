@@ -214,6 +214,10 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
 .notice-success { color: #174a35; background: #e1eedf; border-color: var(--teal); }
 .notice-warm { color: #69420f; background: #f6edcf; border-color: #9e7425; }
 .admin-shell { padding-top: 22px; }
+.admin-tabs { display: flex; gap: 4px; margin-block: 18px; border-bottom: 2px solid var(--line); }
+.admin-tabs [role="tab"] { flex: 1; min-height: 44px; padding: 10px 16px; border: 0; border-bottom: 4px solid transparent; background: transparent; color: var(--ink); font: inherit; font-weight: 750; cursor: pointer; }
+.admin-tabs [aria-selected="true"] { border-bottom-color: var(--teal); background: var(--surface); }
+.admin-tabs [role="tab"]:focus-visible, .admin-shell [role="tabpanel"]:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 .admin-auth, .admin-toolbar, .admin-duty-card {
   padding: 16px;
   background: var(--surface);
