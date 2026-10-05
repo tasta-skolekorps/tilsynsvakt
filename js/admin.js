@@ -136,13 +136,28 @@ function renderTotals(totals) {
     return;
   }
 
-  totalsElement.innerHTML = totals.map(total => `
-    <article class="admin-total-card">
-      <strong>${escapeHtml(total.guard.name)}</strong>
-      <p>${formatHours(total.totalHours)} timer · ${total.dutyCount} vakter</p>
-      <p class="muted small-copy">${total.dutiesWithoutCheckOut === 0 ? "Alle har registrert utsjekk." : `${total.dutiesWithoutCheckOut} vakter bruker planlagt slutt.`}</p>
-    </article>
-  `).join("");
+  totalsElement.innerHTML = `
+    <table class="week-table admin-total-table" aria-labelledby="totals-heading">
+      <thead>
+        <tr>
+          <th scope="col">Tilsynsvakt</th>
+          <th scope="col">Timer</th>
+          <th scope="col">Vakter</th>
+          <th scope="col">Utsjekk</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${totals.map(total => `
+          <tr>
+            <th scope="row">${escapeHtml(total.guard.name)}</th>
+            <td>${formatHours(total.totalHours)}</td>
+            <td>${total.dutyCount} ${total.dutyCount === 1 ? "vakt" : "vakter"}</td>
+            <td class="muted">${total.dutiesWithoutCheckOut === 0 ? "Alle registrert" : `${total.dutiesWithoutCheckOut} ${total.dutiesWithoutCheckOut === 1 ? "vakt" : "vakter"} bruker planlagt slutt`}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 function renderDuties(duties) {
