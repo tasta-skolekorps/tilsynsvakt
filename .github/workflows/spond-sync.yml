@@ -1,0 +1,88 @@
+name: Spond Sync
+
+on:
+  schedule:
+    - cron: '*/15 4-21 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Simuler synkronisering uten endringer i Spond'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spond-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check Oslo schedule and dry-run mode
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULED_DRY_RUN: ${{ vars.SPOND_SYNC_DRY_RUN }}
+          MANUAL_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
+            hour=$(TZ=Europe/Oslo date +%H)
+            if (( 10#$hour < 6 || 10#$hour >= 23 )); then
+              echo 'Planlagt synkronisering hoppes over utenfor 06:00-23:00 Europe/Oslo.'
+              echo 'run_sync=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            requested_dry_run="$SCHEDULED_DRY_RUN"
+          else
+            requested_dry_run="$MANUAL_DRY_RUN"
+          fi
+          dry_run=true
+          if [[ "$requested_dry_run" == "false" ]]; then
+            dry_run=false
+          fi
+          echo 'run_sync=true' >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required configuration
+        if: steps.gate.outputs.run_sync == 'true'
+        env:
+          SPOND_USERNAME: ${{ secrets.SPOND_USERNAME }}
+          SPOND_PASSWORD: ${{ secrets.SPOND_PASSWORD }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          for required in SPOND_USERNAME SPOND_PASSWORD API_BASE_URL; do
+            if [[ -z "${!required}" ]]; then
+              echo "::error::Mangler obligatorisk konfigurasjon: $required"
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run_sync == 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.gate.outputs.run_sync == 'true'
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Sync backend roster to Spond
+        if: steps.gate.outputs.run_sync == 'true'
+        env:
+          SPOND_USERNAME: ${{ secrets.SPOND_USERNAME }}
+          SPOND_PASSWORD: ${{ secrets.SPOND_PASSWORD }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          SPOND_GROUP_NAME: Tasta Skolekorps - Medlemmer
+          SPOND_SUBGROUP_NAME: Tilsynsvakt
+          SPOND_SYNC_DATES: ${{ vars.SPOND_SYNC_DATES || '2026-11-26' }}
+          DRY_RUN: ${{ steps.gate.outputs.dry_run }}
+        run: dotnet run --project src/Tilsynsvakt.SpondSync -c Release
