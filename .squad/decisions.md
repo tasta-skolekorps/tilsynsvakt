@@ -433,3 +433,308 @@ The following remain unverified or are no longer applicable:
 - **UNVERIFIED — backup/restore process validation:** Implement and test the Table export/restore process, including a restore drill.
 - **UNVERIFIED — forwarded-header trust behind ACA ingress:** Confirm ACA's forwarded-header chain and trusted-hop configuration before relying on client IP rate limiting.
 - **Not applicable:** ACA express storage constraints are irrelevant; standard ACA is the selected deployment target.
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - backend-aspire-tables
+
+#### 2026-10-03: Use Aspire Table Storage client integration
+**By:** user (via Backend)
+**What:** Register `Aspire.Azure.Data.Tables` 13.6.0 with connection name `tables`; resolve `TableServiceClient` lazily in `TableStores` and disable only the integration health check.
+**Why:** Aspire owns local emulator connection details and Azure endpoint credentials. The API keeps its existing readiness check and table initialization because `AddTables` models the service resource, not creation of an application table.
+
+#### 2026-10-03: Local Aspire readiness and persistence
+**By:** Backend (requested by user)
+**What:** Declared the API HTTP endpoint and Development environment in the AppHost; verified Azurite data survives an AppHost restart, then removed the throwaway verification table.
+**Why:** No API launch profile existed, so the existing `WithHttpHealthCheck` had no endpoint and Development-only table creation was not selected.
+
+#### 2026-10-03: Verification status and follow-up
+**By:** Backend (requested by user)
+**What:** API and AppHost builds succeeded without warnings; full solution build and API tests are blocked by three direct `TableStores` constructor calls in `TableStoreContractTests`. Live ACA/managed-identity access remains unverified.
+**Why:** The requested scope excludes test edits; Tester must register the `tables` client from `ConnectionStrings:tables` and construct `TableStores(IServiceProvider, IConfiguration)`.
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - backend-spond-sync
+
+#### 2026-10-05T09:55:13+02:00: Fail closed on unverified Spond mutations
+**By:** Backend, requested by Leif Bjarte Johansson
+**What:** Added the .NET 10 console project, strict environment boundary,
+authenticated Spond reads, Oslo calendar and pure planner. Pinned Olen/Spond
+v1.2.1 and Spond.API v3.0 verify auth2 login, groups, event filters and generic
+event editing, but not guardian-only recipient mutation, subgroup context plus
+specific guardians, scheduled invitation JSON, creation or deletion. All runtime
+mutations remain blocked. Non-dry-run plans requiring a write exit 1. Dry-run
+plans, empty plans and unmatched-guardian skips exit 0. A saturated per-day event
+list fails closed because no pagination cursor was established.
+**Why:** Never invite child members, other families, or guess a production payload.
+Internal EventSpec describes the desired contract, not verified wire JSON.
+Runtime recipient/invitation readback remains unknown, so live idempotence is
+not established. Standard plus extra three-day reminders are also unverified;
+the enum has single 24/48/72-hour options, not proof of combined semantics.
+**Verification:** Release project build and full solution build passed.
+Credential-free Release run exited 1 naming only missing SPOND_USERNAME.
+Existing VSTest suite: 37 passed, 2 opt-in Azurite contracts skipped, 0 failures.
+No credentials, live Spond calls, branches, commits, workflow edits or test files.
+
+#### 2026-10-05T13:55:57.6648116+02:00: Cycle2 verified metadata boundary and remaining blocker
+**By:** Backend, requested by Leif Bjarte Johansson
+**What:** Exhausted pinned public Olen v1.2.1 spond/spond.py,
+spond/_event_template.py, examples/{groups,ical,manual_test_functions}.py,
+tests/test_spond.py; Spond.API v3.0 Services/SpondClient.cs,
+Models/{CommonData.Core.V1,SpondEvent,SpondEventUpdateRequest,SpondEventLocation,SpondMember}.cs,
+Enums.cs and Spond.API.Test/Program.cs. Explicit events/_events/event paths,
+including mixins variants, return 404 at Olen v1.2.1; directory listings agree.
+Newer Olen commit 86df2230bf641b0cc6919970d96dd1106f277170 has no create/delete.
+Public recursive tree API returned 403, but raw sources/directories were accessible.
+Added verified GET /core/v1/sponds/{id} and POST metadata transport, changing
+only heading/description, copying every existing template field with no defaults,
+checking exact marker/group/future actual start, and suppressing unchanged POSTs.
+Changed metadata with meetupTimestamp/scheduledTime/inviteTime is blocked because
+those fields cannot be preserved using the verified template. Recipient/response
+fields are never written; executable full-sync mutations remain blocked.
+Fixed incorrect marker prefix offset/length, discovered by the credential-free mock.
+**Why:** Neither requested pinned source establishes create/delete endpoints,
+guardian-only subgroup-scoped recipients, scheduled invitation JSON/readback,
+recipient replacement without response reset/reinvites, or combined standard and
+extra three-day reminders. Generic update and autoAccept=false are source-confirmed,
+not evidence that these missing contracts can be inferred. recipients.group and
+response member IDs cannot supply full verified EventSpec. No entire-subgroup or
+child invitations, guessed mutation endpoints, credentials or live calls are used.
+**Verification:** Narrow Release build passed. In-memory HTTP probe passed:
+one metadata POST followed by second-run no-op; protected fields unchanged in the
+mock; unowned/wrong-group/past/meetup/scheduled/invite cases blocked. This is NOT
+live-tested server notification or response-preservation evidence. Full scheduled
+roster-sync runtime idempotence remains unverified. Pilot env limit, location,
+public logging and unmatched-existing-event preservation contracts unchanged.
+
+**Final validation:** dotnet build Tilsynsvakt.slnx passed;
+dotnet test Tilsynsvakt.slnx --no-build: 37 passed, 2 opt-in Azurite tests skipped,
+0 failures. Test project discovery found only the API VSTest/xUnit project;
+no additional sync test project was available at the final check. No test files
+were changed. Editor diagnostics for the three changed sync C# files are clear.
+
+#### 2026-10-05T13:55:57.6648116+02:00: Targeted pinned directory evidence completion
+**By:** Backend, requested by Leif Bjarte Johansson
+**What:** Replaced guessed-path absence evidence in README with complete actual
+Olen v1.2.1 package/examples/tests and Spond.API v3.0 services/models/console
+directory inventories. Inspected every Olen package/example/test Python source
+except the configuration sample; inspected Spond.API service, both endpoint
+builders, all event models, group/member models, enum and console example.
+Actual event methods are get_events/get_event/update_event/get_event_attendance_xlsx/
+change_response and GetEvents/GetEvent/UpdateEvent/GetEventAttendance/ChangeResponse.
+No listed package mixins or additional service files exist. Both pinned clients
+lack event creation/deletion implementations; the update payload excludes
+recipients, meetup and invitation scheduling fields. Directory inspection is
+complete for the recorded paths; unrelated models were inventoried, not claimed
+as source-reviewed. Public recursive tree requests were rate-limited through
+fetch and unauthenticated PowerShell; directory/raw retrieval succeeded.
+**Why:** Endpoint verification must not be confused with safe guardian invitation
+payload evidence. No additional requirement-compatible transport was established;
+keep existing limited metadata transport and fail-closed executable unchanged.
+Absence applies to these pinned clients, not to Spond's private API capabilities.
+**Verification:** Narrow Debug sync build and full solution build succeeded.
+Unchanged solution tests: 37 passed, 2 opt-in Azurite contracts skipped, 0 failed;
+no concurrent sync test project present. Rerun credential-free HTTP mock: two
+fresh GETs, one metadata POST, second-run no-op, protected mock fields unchanged,
+and unowned/wrong-group/past-start/meetupTimestamp/scheduledTime/inviteTime all
+blocked with zero POSTs. This pass edited only README and backend history/inbox;
+existing code and all unrelated changes were preserved. Live transport behavior
+and full scheduled roster-sync idempotence remain unverified.
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - copilot-directive-2026-10-03-frontend-scope
+
+#### 2026-10-03: User directive (frontend v1 scope)
+**By:** Leif Bjarte Johansson (via Copilot)
+**What:**
+- Stack: vanilla HTML/CSS/JS with ES modules, no build step.
+- Location: `web/` at the repo root.
+- v1 features: Vaktliste (roster + my shifts + next handover), Påmelding (sign up / change / cancel via the API), Sjekkliste (checklist progress for today's shift in `localStorage`). Name selection (stored in `localStorage`) is required by these features.
+- Deferred: Dagens plan, Kontaktliste, Avviksskjema.
+- Serve the frontend from the Aspire AppHost for local dev with the API URL injected.
+- Include a GitHub Pages deploy workflow now.
+**Why:** User decision — captured for team memory
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - copilot-directive-2026-10-05-spond-sync
+
+#### 2026-10-05T09:55:13+02:00: User directive (Spond sync requirements)
+**By:** Leif Bjarte Johansson (via Copilot)
+**What:**
+- **Auth:** Leif's personal Spond account (email + password, 2FA off). User explicitly accepts the risk (full-account access if the secret leaks; Spond ToS §5 does not explicitly allow unofficial automation). Secrets `SPOND_USERNAME`, `SPOND_PASSWORD` in GitHub Actions Secrets only; the user sets them, never the team.
+- **Runtime:** .NET console app (Spond.API v3.0 or raw HTTP). Login endpoint is `POST https://api.spond.com/core/v1/auth2/login` (old `/login` broke May 2026).
+- **Schedule:** every 15 min, 06:00–23:00 Europe/Oslo (cron is UTC), plus `workflow_dispatch` with a `dry-run` input. First runs use dry-run.
+- **Window:** today through the end of the current period (28.11 or 29.05).
+- **Scope:** only taken shifts get Spond events; open shifts get none. Past events are not touched.
+- **Changes:** guard changed → update invitees; shift cancelled → delete event.
+- **Ownership:** the sync only touches events containing a hidden marker line in the description, e.g. `[tilsynsvakt-sync:2026-10-06]`.
+- **Event:** title «Tilsynsvakt Tasta Skole»; meet 16:40, start 16:45, end 22:00 (Europe/Oslo); location «Tasta Skole, Randabergveien»; description «Se nettside https://tasta-skolekorps.github.io/tilsynsvakt/ for informasjon, evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!» + marker line.
+- **Responses:** guards are invited (must confirm), not auto-accepted. Reminders: Spond's standard automatic reminder to unanswered invites + an extra reminder 3 days before.
+- **Recipients:** the Tilsynsvakt subgroup members are children (band members); parents are guardians on the child's profile. The backend guard (named after the child's last name) has one parent's phone. Match that phone (E.164) to a guardian → invite that parent and the other guardian of the same child. No match → warn, skip that shift, and keep going.
+- **Logging:** public logs show only date + action + backend guard name. Never log Spond member/guardian names, IDs or phone numbers.
+- **Failures:** GitHub's default failure email (no issue automation).
+**Why:** User interview, 2026-10-05.
+
+**Amendments (same day, supersede conflicting points above):**
+- **Group:** every event is created in group «Tasta Skolekorps - Medlemmer», subgroup «Tilsynsvakt» (the event's recipients point at that subgroup).
+- **Recipients:** invite **only the guardians** (parents) of the matched child, not the child member. The Spond web UI supports this (Invite → Members / Guardians / Subgroups / Contact).
+- **Pilot scope:** for now the Action creates at most **one** event: the last shift before the Christmas holiday. With the current calendar (autumn period 01.09–28.11; 28.11.2026 is a Saturday), that is **Thursday 26.11.2026**. Configure this as a single-date limit (not a hard-coded constant) so it can be widened later. If that shift is open, nothing is created.
+- **Invitation time:** invitations are scheduled to be sent **7 days before the event start** (Spond's "scheduled event" invite time), e.g. 19.11.2026 16:45 for the 26.11 event. Reminder 3 days before still applies.
+- Reference: a manually created event in Spond (Tue 13.10, meet 16:40, 16:45–22:00, «Tasta skole, Randabergveien, Stavanger», host Leif, Tasta Skolekorps - Medlemmer • Tilsynsvakt, scheduled invite) shows the target shape.
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - infra-spond-sync-workflow
+
+#### 2026-10-05T09:55:13+02:00: Fail-safe Spond workflow contract
+**By:** Infra (requested by Leif Bjarte Johansson; issue #39)
+**What:**
+- `.github/workflows/spond-sync.yml` runs `dotnet run --project tools/Tilsynsvakt.SpondSync -c Release` using `actions/checkout@v4`, `actions/setup-dotnet@v4`, and SDK `10.0.x`, matching Squad CI.
+- UTC cron `*/15 4-21 * * *` covers both Oslo offsets. The first step checks the actual `Europe/Oslo` hour and permits scheduled runs only from 06 through 22 inclusive. All remaining steps skip outside that interval; manual dispatch bypasses the hour gate.
+- Manual boolean `dry_run` defaults true and preserves explicit false. Scheduled writes require the exact case-sensitive repository variable value `SPOND_SYNC_DRY_RUN` of `false`; all other values select dry-run. Both are injected through environment variables and compared in Bash, never interpolated into script source.
+- The app receives `API_BASE_URL` from the repository variable; Spond credentials only from the `SPOND_USERNAME` and `SPOND_PASSWORD` Actions secrets. Secrets are scoped to the presence-validation and sync steps, not checkout/setup. Missing required configuration fails before checkout without logging values.
+- The app receives group `Tasta Skolekorps - Medlemmer`, subgroup `Tilsynsvakt`, and `SPOND_SYNC_DATES` from the repository variable with fallback `2026-11-26`. The app owns enforcing the configurable date allowlist and amended event/guardian behavior.
+- Fixed concurrency group `spond-sync`, no cancellation of in-progress runs, ten-minute job timeout, and only `contents: read`. Failures propagate normally; no issue or custom notification automation.
+**Why:** First runs must be non-mutating and restricted to one pilot date, with no overlapping sync jobs, credential disclosure, or seasonal schedule drift.
+**Validation:** A duplicate-key-rejecting PyYAML parser and structural contract assertions passed, as did Bash syntax checks, 44 winter/summer/DST/hour-boundary cases, 20 exact dry-run/injection/manual-bypass cases, and four synthetic presence-validation cases. Git Bash lacks IANA timezone data, so date-based behavior tests used the equivalent POSIX rule `CET-1CEST,M3.5.0/2,M10.5.0/3`; the Ubuntu `Europe/Oslo` lookup is unverified locally. Actionlint is unavailable. No live Spond/backend requests, app builds, or app-file changes were made. Owner must configure secrets/variables and default GitHub failed-run email notifications. GitHub schedules can be delayed; exact fifteen-minute delivery is not guaranteed.
+
+### 2026-10-05T09:55:13+02:00: Inbox evidence - tester-spond-sync
+
+#### 2026-10-05T09:55:13+02:00: Issue #39 pure sync regression coverage
+**By:** Tester, requested by Leif Bjarte Johansson
+**Scope:** Local state; branch squad/39-spond-sync. Test project, solution registration,
+own history and this inbox only. No production edits, workflow/API/frontend/README
+edits, prohibited git actions, external service calls, secrets or data/*.json reads.
+Environment options use an injected function returning inert test-placeholder values;
+they never inspect the process environment. Fixtures use Familien Test / +4790000001
+and synthetic test-prefixed identifiers only.
+
+**Local hypothesis:** An exact ownership marker is recognized, and an already matching
+verified guardian-only EventSpec produces an empty plan. The first focused executable
+check passed both marker round-trip and unchanged-event idempotence tests.
+
+**Coverage:** 88 xUnit cases cover taken-only creation; explicit-open owned deletion;
+guardian-change updates; verified-state idempotence and guardian order; unverified-state
+update proposals; unmarked and past events untouched; unmatched skips preserving existing
+events and continuing later actions; guardian-only subgroup membership and ambiguous,
+duplicate, child-ID and missing-ID refusal; three supported phone formats; invalid phones;
+exact marker parsing and duplicate-marker refusal; duplicate/inconsistent/missing roster
+fail-closed behavior; configurable 26.11 pilot with taken/open cases, excluded existing
+event, full-window fallback, date widening and window intersections; DRY_RUN defaults and
+validation; configuration error sanitation; exact title/location/description and
+autoAccept=false; 16:40/16:45/22:00 Oslo times on 20.10 CEST and 26.11 CET; 19.11 16:45
+invitation for 26.11 plus the 27.10 DST-crossing invitation; Oslo today and season edges;
+JSON pure helpers, in-memory response sanitation and PublicName workflow-line escaping.
+
+**Commands and measured results:**
+- SDK: `dotnet --version` -> 10.0.301; xUnit 2.9.3, VSTest adapter 3.1.5,
+  Microsoft.NET.Test.Sdk 17.14.1 match existing API test versions.
+- VS Code runTests for SyncPlannerTests.cs initially returned no tests discovered;
+  direct VSTest invocation was used thereafter.
+- `dotnet test tests/Tilsynsvakt.SpondSync.Tests/Tilsynsvakt.SpondSync.Tests.csproj --filter "FullyQualifiedName~OwnedDate_RoundTripsMarkerOnItsOwnDescriptionLine|FullyQualifiedName~Plan_UnchangedVerifiedEvent_IsIdempotent"`
+  -> 2 passed / 0 failed / 0 skipped, immediately after first edit.
+- First expanded scoped build failed CS1022 due to an extra brace in the authored test
+  file; removed the brace only, then reran the same command. No assertions weakened.
+- `dotnet test tests/Tilsynsvakt.SpondSync.Tests/Tilsynsvakt.SpondSync.Tests.csproj`
+  -> final 88 passed / 0 failed / 0 skipped (earlier expanded suite 87/0/0).
+- `dotnet test Tilsynsvakt.slnx` -> final 127 total: 125 passed / 0 failed / 2 skipped.
+  API project: 37 passed / 0 failed / 2 skipped; sync project: 88/0/0.
+  Earlier solution run before the final continuation case: 124/0/2.
+  Both skips are existing opt-in TableStoreContractTests: atomicity/lifecycle and
+  concurrent guard-ID allocation; TILSYNSVAKT_AZURITE=1 was not set or enabled.
+  Expected unhealthy in-memory health-check logging did not represent a failed test.
+
+**Failures/bugs:** No production requirement failures found in the exercised slice.
+The one test-authoring syntax failure was corrected and is not a production defect.
+No tests skipped to conceal failures. No mutation payload inferred or production fix made.
+
+**Concrete gaps:**
+- GetEventsAsync supplies VerifiedState=null. Pure idempotence uses a constructed verified
+  EventSpec; full live recipient/invitation readback and second-run idempotence are unknown.
+- Program's warning label/prefix, complete output assembly, generic catch and exit policy
+  remain inline with authenticated orchestration. Pure tests verify SkipUnmatched,
+  continuation, sanitized response errors and PublicName, not actual warning emission
+  or end-to-end exit codes. No new production extraction was authorized or performed.
+- Guardian has no name field, so arbitrary guardian-name suppression at the complete
+  output boundary is not exercised. PublicName receives only backend name; tests assert
+  synthetic guardian/child/group/subgroup IDs and phones never enter that helper output.
+  Reflection depends on compiler-generated PublicName naming, not entry-point execution.
+- Limited metadata HTTP transport and preserved response/notification state were not
+  exercised by this pure-only suite. No live verification is claimed.
+- Create/delete endpoints, guardian-only subgroup wire selection, scheduled invite payloads,
+  recipient replacement without response resets/reinvites, and combined standard plus
+  extra three-day reminders remain unverified. EventSpec lacks a reminder contract;
+  no reminder assertion can establish delivery. Runtime full writes intentionally fail closed.
+
+**Changed paths for coordinator validation:**
+- Tilsynsvakt.slnx
+- tests/Tilsynsvakt.SpondSync.Tests/Tilsynsvakt.SpondSync.Tests.csproj
+- tests/Tilsynsvakt.SpondSync.Tests/SyncPlannerTests.cs
+- tests/Tilsynsvakt.SpondSync.Tests/SyncOptionsTests.cs
+- tests/Tilsynsvakt.SpondSync.Tests/SyncCalendarTests.cs
+- tests/Tilsynsvakt.SpondSync.Tests/SafeHelpersTests.cs
+- .squad/agents/tester/history.md (append only)
+- .squad/decisions/inbox/tester-spond-sync.md
+
+**Decision:** Tests validate pure pilot safety, scheduling and deterministic planning,
+not live production readiness. Keep source-verification and runtime mutation blockers visible.
+
+### 2026-10-05T15:30:00+02:00: User-verified Spond schema supersedes earlier blocker
+
+#### 2026-10-05T15:30:00+02:00: User-verified Spond schema supersedes earlier blocker
+
+**By:** Backend; issue #39.
+**Evidence:** User supplied observed schema with writes intercepted/aborted. This
+implementation did not repeat that session, execute the app, or call real services.
+
+- GET `/core/v1/sponds` uses `includeComments=true`, `includeHidden=false`,
+  `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=20`, `minEndTimestamp`.
+  Event fields include marker description, start/end/meetup timestamps, numeric
+  meetupPrior, location id/feature, recipients group/subGroups/members, profiles,
+  guardians, inviteTime, visibility, reminder and owner fields. No invented page
+  cursor: inclusive end-time overlap, deduplication, stalled-boundary refusal.
+- GET `/core/v1/groups`: member.subGroups contains ID STRINGS. Guardian has id,
+  phoneNumber, email and optional profile.id; guardian.id is not profileId.
+  Match backend E164 phone across all matching children in the subgroup; dedupe
+  profile IDs. A required missing profile warns and skips the whole shift.
+- POST `/core/v1/sponds`: heading/description, spondType `event`, type `EVENT`,
+  start/end UTC, commentsDisabled true, meetupPrior STRING `5`, maxAccepted 0,
+  rsvpDate null, location, owners [{id}], visibility INVITEES, participantsHidden
+  true, autoReminderType REMIND_48H_BEFORE, matchInfo null, autoAccept false,
+  attachments [], tasks {openTasks:[],assignedTasks:[]}, requested inviteTime,
+  recipients {groupMembers:[],guardians:[{email,phoneNumber,profileId}],
+  group:{id,subGroups:[ID STRING]}}. Owner uses only GET `/core/v1/profile.id`.
+- POST `/core/v1/sponds/{id}` metadata: spondType EVENT, heading/description,
+  start/end, commentsDisabled, rsvpDate null, inviteTime, location {id,feature},
+  owners [{id}], visibility, participantsHidden, autoReminderType, matchInfo null,
+  autoAccept, payment, attachments, id, tasks. NO recipients or response writes.
+- POST `/core/v1/sponds/{id}/recipients`: profiles [], group {id,subGroups:[{id}]},
+  groupMembers [], guardians [{email,phoneNumber,profileId}]. Adds only; pure
+  builder retained but not used for replacements. No verified removal contract.
+- DELETE `/core/v1/sponds/{id}?quiet=true`: silent deletion. Changed guardians
+  produce ordered quiet DELETE then CREATE; explicit open shifts delete only owned
+  future events. Cancel-and-notify remains unverified. Replacement is not atomic.
+- Exact title/description and date marker retained. Start 16:45/end 22:00 Oslo;
+  invite seven Oslo wall-clock days earlier, including DST crossing. DRY_RUN defaults
+  true; explicit false no longer hits the obsolete global refuse-writes guard.
+- Local tests cover fake wire payloads, profile matching, missing-profile skip,
+  replacement order, dry-run zero requests, metadata no-op, paging and refusal.
+  Logs expose only date, action and backend guard name; no Spond data is logged.
+
+**Unverified/open:** feature-only location without id; inviteTime on CREATE (only
+event/update usage observed); additional three-day reminder. Only REMIND_48H_BEFORE
+is verified. Event guardian item fields were not provided: local readback supports
+explicit profileId and fails closed otherwise; live full-sync idempotence is not
+claimed. Notification/response preservation and server acceptance remain untested.
+
+### 2026-10-05T15:45:00+02:00: User directive (Spond reminder and location)
+**By:** Leif Bjarte Johansson (via Copilot)
+**What:** Accept `REMIND_48H_BEFORE` as the only automatic reminder; the extra 3-day reminder is dropped (Spond's UI does not offer it). Accept location feature text «Tasta skole, Randabergveien, Stavanger» without location id; the first non-dry run confirms it.
+**Why:** User decision, issue #39.
+
+### 2026-10-05T15:30:00+02:00: Fail-safe Spond workflow contract after project relocation
+
+#### 2026-10-05T09:55:13+02:00: Fail-safe Spond workflow contract
+**By:** Infra (issue #39)
+**What:**
+- `.github/workflows/spond-sync.yml` runs `dotnet run --project src/Tilsynsvakt.SpondSync -c Release` using `actions/checkout@v4`, `actions/setup-dotnet@v4`, and SDK `10.0.x`, matching Squad CI.
+- UTC cron `*/15 4-21 * * *` covers both Oslo offsets. The first step checks the actual `Europe/Oslo` hour and permits scheduled runs only from 06 through 22 inclusive. All remaining steps skip outside that interval; manual dispatch bypasses the hour gate.
+- Manual boolean `dry_run` defaults true and preserves explicit false. Scheduled writes require the exact case-sensitive repository variable value `SPOND_SYNC_DRY_RUN` of `false`; all other values select dry-run. Both are injected through environment variables and compared in Bash, never interpolated into script source.
+- The app receives `API_BASE_URL` from the repository variable; Spond credentials only from the `SPOND_USERNAME` and `SPOND_PASSWORD` Actions secrets. Secrets are scoped to the presence-validation and sync steps, not checkout/setup. Missing required configuration fails before checkout without logging values.
+- The app receives group `Tasta Skolekorps - Medlemmer`, subgroup `Tilsynsvakt`, and `SPOND_SYNC_DATES` from the repository variable with fallback `2026-11-26`. The app owns enforcing the configurable date allowlist and amended event/guardian behavior.
+- Fixed concurrency group `spond-sync`, no cancellation of in-progress runs, ten-minute job timeout, and only `contents: read`. Failures propagate normally; no issue or custom notification automation.
+**Why:** First runs must be non-mutating and restricted to one pilot date, with no overlapping sync jobs, credential disclosure, or seasonal schedule drift.
+**Validation:** A duplicate-key-rejecting PyYAML parser and structural contract assertions passed, as did Bash syntax checks, 44 winter/summer/DST/hour-boundary cases, 20 exact dry-run/injection/manual-bypass cases, and four synthetic presence-validation cases. Git Bash lacks IANA timezone data, so date-based behavior tests used the equivalent POSIX rule `CET-1CEST,M3.5.0/2,M10.5.0/3`; the Ubuntu `Europe/Oslo` lookup is unverified locally. Actionlint is unavailable. No live Spond/backend requests, app builds, or app-file changes were made. Owner must configure secrets/variables and default GitHub failed-run email notifications. GitHub schedules can be delayed; exact fifteen-minute delivery is not guaranteed.

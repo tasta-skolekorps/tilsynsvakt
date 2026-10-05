@@ -9,6 +9,9 @@
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 
+# Local browser artifacts
+.playwright-mcp/
+
 # .NET build output
 /src/**/bin/
 /tests/**/bin/
