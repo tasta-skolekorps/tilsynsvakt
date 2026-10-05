@@ -386,7 +386,7 @@ function weekTable() {
   const table = node("table", "week-table");
   table.append(node("caption", "sr-only", "Vaktliste per uke"));
   const head = node("tr");
-  for (const label of ["Uke", "Dato", ...days.map(day => day[1]), "Ledige"]) {
+  for (const label of ["Uke", "Dato", ...days.map(day => day[1])]) {
     const cell = node("th", "", label);
     cell.scope = "col";
     head.append(cell);
@@ -402,7 +402,6 @@ function weekTable() {
     const week = node("th", "", String(info.week));
     week.scope = "row";
     row.append(week, node("td", "week-dates", `${format(info.monday)} - ${format(info.thursday)}`));
-    let open = 0;
     for (const [index] of days) {
       const shift = shifts[index];
       const cell = node("td");
@@ -417,7 +416,6 @@ function weekTable() {
         cell.className = "week-none";
         cell.textContent = "Ingen vakt";
       } else if (shift.status === "open") {
-        open++;
         cell.className = "week-open";
         const signup = node("button", "button button-primary signup-inline", "Meld på");
         signup.type = "button";
@@ -430,7 +428,6 @@ function weekTable() {
       }
       row.append(cell);
     }
-    row.append(node("td", "week-count", String(open)));
     body.append(row);
   }
   table.append(body);

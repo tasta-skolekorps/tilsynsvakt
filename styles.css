@@ -414,7 +414,7 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .week-table thead th { background: var(--sun); color: var(--navy-deep); position: sticky; top: 0; }
 .week-table tbody th { background: var(--paper); font-weight: 700; }
 .week-table tr:last-child > * { border-bottom: 0; }
-.week-table th:last-child, .week-table td:last-child { border-right: 0; text-align: center; }
+.week-table th:last-child, .week-table td:last-child { border-right: 0; }
 .week-dates { color: var(--muted); }
 .week-board, .week-none { color: var(--muted); }
 .week-closed { color: var(--muted); font-style: italic; }
