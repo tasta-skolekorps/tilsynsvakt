@@ -8,7 +8,7 @@ namespace Tilsynsvakt.SpondSync;
 public sealed class SpondClient(HttpClient http)
 {
     public static readonly Uri BaseUrl = new("https://api.spond.com/core/v1/");
-    private const int EventLimit = 20;
+    private const int EventLimit = 100;
 
     public async Task LoginAsync(string username, string password, CancellationToken cancellationToken = default)
     {
@@ -53,13 +53,20 @@ public sealed class SpondClient(HttpClient http)
         var events = new Dictionary<string, ExistingEvent>(StringComparer.Ordinal);
         if (dates.Count == 0) return [];
         var cursor = SyncCalendar.At(dates.Min(), TimeOnly.MinValue);
+        var end = SyncCalendar.At(dates.Max().AddDays(1), TimeOnly.MinValue);
         for (var pageNumber = 0; pageNumber < 1000; pageNumber++)
         {
             var query = "sponds?includeComments=true&includeHidden=false&addProfileInfo=true&scheduled=true" +
-                $"&order=asc&max={EventLimit}&minEndTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(cursor))}";
+                $"&order=asc&max={EventLimit}&groupId={Uri.EscapeDataString(groupId)}" +
+                $"&minStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(cursor))}" +
+                $"&maxStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(end))}";
             using var response = await http.GetAsync(new Uri(BaseUrl, query), cancellationToken);
             using var document = await ReadAsync(response, cancellationToken);
             var page = Array(document.RootElement);
+            var starts = page.Select(item => Instant(item, "startTimestamp")).ToArray();
+            if (!starts.SequenceEqual(starts.Order()) || (starts.Length > 0 && starts[0] < cursor) ||
+                (page.Length >= EventLimit && starts[^1] <= cursor))
+                throw new SyncException("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.");
             foreach (var item in page)
             {
                 var description = OptionalText(item, "description");
@@ -74,10 +81,7 @@ public sealed class SpondClient(HttpClient http)
                 events[id] = new ExistingEvent(id, description, ReadState(item));
             }
             if (page.Length < EventLimit) return events.Values.ToArray();
-            var ends = page.Select(item => Instant(item, "endTimestamp")).ToArray();
-            if (!ends.SequenceEqual(ends.Order()) || ends[^1] <= cursor)
-                throw new SyncException("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.");
-            cursor = ends[^1];
+            cursor = starts[^1];
         }
         throw new SyncException("Arrangementlisten kan være avkortet; ingen endringer sendt.");
     }

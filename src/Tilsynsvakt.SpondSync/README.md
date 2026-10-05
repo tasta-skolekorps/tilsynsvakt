@@ -9,10 +9,16 @@ or live service was run while implementing these contracts; tests use local mock
 ## Current Contract
 
 - List `/core/v1/sponds` with `includeComments=true`, `includeHidden=false`,
-  `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=20`, and
-  `minEndTimestamp`. Pagination overlaps the last end timestamp and deduplicates
-  event IDs; a full stalled boundary or non-monotonic end timestamps fails closed
-  rather than skipping events with tied timestamps. No invented offset/cursor.
+  `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=100`, `groupId`,
+  `minStartTimestamp`, and `maxStartTimestamp`. The start window runs from the
+  earliest sync date's Oslo midnight to midnight after the latest sync date,
+  converted to UTC. Pagination overlaps the last start timestamp and deduplicates
+  event IDs; descending starts, starts before the cursor, or a full page without
+  cursor progress fail closed. Multiday events need not have ordered end times.
+  Client-side group, ownership-marker and date checks remain required.
+  Olen/Spond v1.2.1 `get_events` verifies the start filters, `groupId`, `max`,
+  `scheduled` and `includeHidden`; `includeComments`, `addProfileInfo` and `order`
+  retain the earlier user-established verification, not evidence from that source.
 - Match normalized backend phones to guardians across every matching child whose
   `member.subGroups` contains the target subgroup ID string. Invite all of those
   guardians by profile ID, deduplicate shared profiles, and never invite children.
