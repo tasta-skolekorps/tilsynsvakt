@@ -67,10 +67,10 @@ jobs:
             fi
           done
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.run_sync == 'true'
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.gate.outputs.run_sync == 'true'
         with:
           dotnet-version: 10.0.x
