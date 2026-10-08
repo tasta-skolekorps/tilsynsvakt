@@ -138,7 +138,7 @@ public sealed class SyncPlannerTests
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             existing, unmatchedGroup, new HashSet<DateOnly> { PilotDate }, Today));
 
-        Assert.Equal(SyncActionKind.SkipUnmatched, action.Kind);
+        Assert.Equal(SyncActionKind.SkipPhoneNotFound, action.Kind);
         Assert.Equal("Familien Test", action.GuardName);
         Assert.Null(action.EventId);
         Assert.Null(action.Desired);
@@ -152,7 +152,7 @@ public sealed class SyncPlannerTests
     {
         Assert.Equal("+4790000001", SyncPlanner.NormalizePhone(phone));
         Assert.Equal(new[] { "test-parent-a", "test-parent-b" },
-            SyncPlanner.MatchGuardians(TestGuard with { Phone = phone }, Group));
+            SyncPlanner.MatchGuardians(TestGuard with { Phone = phone }, Group).ProfileIds);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public sealed class SyncPlannerTests
             action =>
             {
                 Assert.Equal(PilotDate, action.Date);
-                Assert.Equal(SyncActionKind.SkipUnmatched, action.Kind);
+                Assert.Equal(SyncActionKind.SkipPhoneNotFound, action.Kind);
             },
             action =>
             {
@@ -191,7 +191,8 @@ public sealed class SyncPlannerTests
     public void MatchGuardians_IgnoresMatchingFamilyOutsideSubgroup()
     {
         var outside = Group.Members[0] with { SubGroups = new[] { "test-other-subgroup" } };
-        Assert.Null(SyncPlanner.MatchGuardians(TestGuard, Group with { Members = new[] { outside } }));
+        Assert.Equal(GuardianMatchOutcome.PhoneNotFound,
+            SyncPlanner.MatchGuardians(TestGuard, Group with { Members = new[] { outside } }).Outcome);
     }
 
     [Fact]
@@ -200,7 +201,7 @@ public sealed class SyncPlannerTests
         var sibling = Group.Members[0] with { Id = "test-other-child", Guardians = [
             Group.Members[0].Guardians[0], new Guardian("test-parent-c", null, "test-parent-c")] };
         Assert.Equal(new[] { "test-parent-a", "test-parent-b", "test-parent-c" }, SyncPlanner.MatchGuardians(TestGuard,
-            Group with { Members = new[] { Group.Members[0], sibling } }));
+            Group with { Members = new[] { Group.Members[0], sibling } }).ProfileIds);
     }
 
     [Theory]
@@ -216,14 +217,66 @@ public sealed class SyncPlannerTests
             Group with { Members = new[] { child } }));
     }
 
+    private static TargetGroup PartialGroup => Group with { Members = [Group.Members[0] with
+        { Guardians = [Group.Members[0].Guardians[0], new Guardian("test-parent-b", null)] }] };
+
     [Fact]
-    public void Plan_MissingAnyRequiredProfileSkipsWholeShift()
+    public void MatchGuardians_ReportsEachOutcome()
     {
-        var child = Group.Members[0] with { Guardians = [Group.Members[0].Guardians[0], new Guardian("test-parent-b", null)] };
+        var notFound = SyncPlanner.MatchGuardians(TestGuard with { Phone = "+4790000009" }, Group);
+        Assert.Equal(GuardianMatchOutcome.PhoneNotFound, notFound.Outcome);
+        Assert.Empty(notFound.ProfileIds);
+
+        var partial = SyncPlanner.MatchGuardians(TestGuard, PartialGroup);
+        Assert.Equal(GuardianMatchOutcome.Matched, partial.Outcome);
+        Assert.True(partial.MissingProfiles);
+        Assert.Equal(new[] { "test-parent-a" }, partial.ProfileIds);
+
+        var full = SyncPlanner.MatchGuardians(TestGuard, Group);
+        Assert.Equal(GuardianMatchOutcome.Matched, full.Outcome);
+        Assert.False(full.MissingProfiles);
+    }
+
+    [Fact]
+    public void Plan_PartialProfilesInvitesProfiledGuardiansAndWarns()
+    {
+        var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [], PartialGroup,
+            new HashSet<DateOnly> { PilotDate }, Today);
+
+        Assert.Collection(actions,
+            action =>
+            {
+                Assert.Equal(SyncActionKind.WarnMissingProfiles, action.Kind);
+                Assert.Equal("Familien Test", action.GuardName);
+                Assert.Null(action.Desired);
+            },
+            action =>
+            {
+                Assert.Equal(SyncActionKind.Create, action.Kind);
+                Assert.Equal(new[] { "test-parent-a" }, action.Desired!.GuardianIds);
+            });
+    }
+
+    [Fact]
+    public void Plan_PartialProfilesSecondRunMakesNoChanges()
+    {
+        var state = SyncPlanner.DesiredEvent(PilotDate, PartialGroup, ["test-parent-a"]);
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", state.Description, state)], PartialGroup, new HashSet<DateOnly> { PilotDate }, Today));
+        Assert.Equal(SyncActionKind.WarnMissingProfiles, action.Kind);
+        Assert.Null(action.EventId);
+    }
+
+    [Fact]
+    public void Plan_NoGuardianProfilesSkipsShift()
+    {
+        var child = Group.Members[0] with { Guardians = [new Guardian("test-parent-a", "+4790000001"), new Guardian("test-parent-b", null)] };
+        Assert.Equal(GuardianMatchOutcome.NoProfiles, SyncPlanner.MatchGuardians(TestGuard, Group with { Members = [child] }).Outcome);
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", SyncPlanner.Marker(PilotDate), null)], Group with { Members = [child] },
             new HashSet<DateOnly> { PilotDate }, Today));
-        Assert.Equal(SyncActionKind.SkipUnmatched, action.Kind);
+        Assert.Equal(SyncActionKind.SkipNoProfiles, action.Kind);
+        Assert.Equal("Familien Test", action.GuardName);
         Assert.Null(action.EventId);
     }
 

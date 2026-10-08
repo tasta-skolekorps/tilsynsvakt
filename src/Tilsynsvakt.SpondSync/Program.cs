@@ -41,9 +41,12 @@ try
             SyncActionKind.Create => options.DryRun ? "planlagt opprettelse" : "opprettet",
             SyncActionKind.Update => options.DryRun ? "planlagt metadataoppdatering" : "metadata oppdatert",
             SyncActionKind.Delete => options.DryRun ? "planlagt stille sletting" : "slettet stille",
-            _ => "ingen sikker foresattmatch; vakt hoppet over"
+            SyncActionKind.SkipPhoneNotFound => "telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over",
+            SyncActionKind.SkipNoProfiles => "ingen av de foresatte har Spond-profil; vakt hoppet over",
+            _ => "én eller flere foresatte mangler Spond-profil og ble ikke invitert;"
         };
-        var prefix = action.Kind == SyncActionKind.SkipUnmatched ? "::warning::" : "";
+        var prefix = action.Kind is SyncActionKind.SkipPhoneNotFound or SyncActionKind.SkipNoProfiles
+            or SyncActionKind.WarnMissingProfiles ? "::warning::" : "";
         Console.WriteLine($"{prefix}{action.Date:yyyy-MM-dd} {label}{name}");
     }, timeout.Token);
     return 0;

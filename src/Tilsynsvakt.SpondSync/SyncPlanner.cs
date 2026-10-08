@@ -12,7 +12,9 @@ public sealed record EventSpec(
     DateTimeOffset Start, DateTimeOffset End, DateTimeOffset InviteAt,
     string GroupId, string SubgroupId, IReadOnlyList<string> GuardianIds, bool AutoAccept = false);
 public sealed record ExistingEvent(string Id, string? Description, EventSpec? VerifiedState);
-public enum SyncActionKind { Create, Update, Delete, SkipUnmatched }
+public enum SyncActionKind { Create, Update, Delete, SkipPhoneNotFound, SkipNoProfiles, WarnMissingProfiles }
+public enum GuardianMatchOutcome { Matched, PhoneNotFound, NoProfiles }
+public sealed record GuardianMatch(GuardianMatchOutcome Outcome, IReadOnlyList<string> ProfileIds, bool MissingProfiles);
 public sealed record SyncAction(DateOnly Date, SyncActionKind Kind, string? GuardName,
     string? EventId, EventSpec? Desired)
 {
@@ -83,20 +85,23 @@ public static class SyncPlanner
             ? phone : null;
     }
 
-    public static IReadOnlyList<string>? MatchGuardians(Guard guard, TargetGroup group)
+    public static GuardianMatch MatchGuardians(Guard guard, TargetGroup group)
     {
         var phone = NormalizePhone(guard.Phone);
         if (phone is null) throw new SyncException("Ugyldig telefonformat i vaktlisten.");
         var children = group.Members.Where(member => member.SubGroups.Contains(group.SubgroupId, StringComparer.Ordinal) &&
             member.Guardians.Any(guardian => NormalizePhone(guardian.PhoneNumber) == phone)).ToArray();
-        if (children.Length == 0) return null;
+        if (children.Length == 0) return new(GuardianMatchOutcome.PhoneNotFound, [], false);
         var guardians = children.SelectMany(child => child.Guardians).ToArray();
-        if (guardians.Any(guardian => string.IsNullOrWhiteSpace(guardian.ProfileId))) return null;
-        var ids = guardians.Select(guardian => guardian.ProfileId!).Distinct(StringComparer.Ordinal).ToArray();
-        if (ids.Length == 0 || guardians.Any(guardian => string.IsNullOrWhiteSpace(guardian.Id)) ||
+        var ids = guardians.Where(guardian => !string.IsNullOrWhiteSpace(guardian.ProfileId))
+            .Select(guardian => guardian.ProfileId!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (guardians.Any(guardian => string.IsNullOrWhiteSpace(guardian.Id)) ||
             ids.Any(id => group.Members.Any(member => member.Id == id)))
             throw new SyncException("Foresattmottakere kan ikke avgrenses sikkert; synkronisering stoppet.");
-        return ids.Order(StringComparer.Ordinal).ToArray();
+        var missing = guardians.Any(guardian => string.IsNullOrWhiteSpace(guardian.ProfileId));
+        return ids.Length == 0
+            ? new(GuardianMatchOutcome.NoProfiles, [], true)
+            : new(GuardianMatchOutcome.Matched, ids, missing);
     }
 
     public static EventSpec DesiredEvent(DateOnly date, TargetGroup group, IReadOnlyList<string> guardianIds) =>
@@ -132,13 +137,16 @@ public static class SyncPlanner
             }
             if (shift.Status != "taken" || shift.Guard is null)
                 throw new SyncException("Ukjent eller ufullstendig vaktstatus fra API-et.");
-            var guardians = MatchGuardians(shift.Guard, group);
-            if (guardians is null)
+            var match = MatchGuardians(shift.Guard, group);
+            if (match.Outcome != GuardianMatchOutcome.Matched)
             {
-                actions.Add(new(date, SyncActionKind.SkipUnmatched, shift.Guard.Name, null, null));
+                actions.Add(new(date, match.Outcome == GuardianMatchOutcome.PhoneNotFound
+                    ? SyncActionKind.SkipPhoneNotFound : SyncActionKind.SkipNoProfiles, shift.Guard.Name, null, null));
                 continue;
             }
-            var desired = DesiredEvent(date, group, guardians);
+            if (match.MissingProfiles)
+                actions.Add(new(date, SyncActionKind.WarnMissingProfiles, shift.Guard.Name, null, null));
+            var desired = DesiredEvent(date, group, match.ProfileIds);
             if (current is null)
                 actions.Add(new(date, SyncActionKind.Create, shift.Guard.Name, null, desired));
             else if (current.VerifiedState is null)

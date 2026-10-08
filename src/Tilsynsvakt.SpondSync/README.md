@@ -3,7 +3,7 @@
 This .NET 10 console tool reads the backend roster and synchronizes owned Spond
 events using the user-supplied schema verified on 05.10.2026. `DRY_RUN` defaults
 to `true`; explicit `false` enables creation, quiet deletion and metadata-only
-updates. Empty plans and unmatched/missing-profile skips exit 0. No application
+updates. Empty plans and phone-not-found/no-profile skips exit 0. No application
 or live service was run while implementing these contracts; tests use local mocks.
 
 ## Current Contract
@@ -20,9 +20,12 @@ or live service was run while implementing these contracts; tests use local mock
   `scheduled` and `includeHidden`; `includeComments`, `addProfileInfo` and `order`
   retain the earlier user-established verification, not evidence from that source.
 - Match normalized backend phones to guardians across every matching child whose
-  `member.subGroups` contains the target subgroup ID string. Invite all of those
-  guardians by profile ID, deduplicate shared profiles, and never invite children.
-  Any required missing profile skips the whole shift with a sanitized warning.
+  `member.subGroups` contains the target subgroup ID string. Invite those
+  guardians that have a Spond profile ID, deduplicate shared profiles, and never
+  invite children. Guardians without a profile are not invited and produce a
+  sanitized warning; the shift is skipped only when the phone matches no guardian
+  in the subgroup or none of the matched guardians has a profile, each with its
+  own sanitized warning reason.
 - Create `POST /core/v1/sponds`: guardian objects contain `email`, `phoneNumber`,
   `profileId`; `groupMembers` is empty, and create subgroup IDs are strings.
   Owner comes only from `/core/v1/profile.id`. Exact heading/description/marker,

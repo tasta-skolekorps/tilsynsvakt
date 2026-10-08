@@ -136,7 +136,7 @@ public sealed class SpondContractTests
         });
         using var http = new HttpClient(handler);
         var group = await new SpondClient(http).GetTargetGroupAsync("Test group", "Test subgroup");
-        Assert.Equal("test-profile", Assert.Single(SyncPlanner.MatchGuardians(new(1, "Test guard", "+4790000001"), group)!));
+        Assert.Equal("test-profile", Assert.Single(SyncPlanner.MatchGuardians(new(1, "Test guard", "+4790000001"), group).ProfileIds));
     }
 
     [Fact]
@@ -200,15 +200,18 @@ public sealed class SpondContractTests
         else Assert.Equal(new[] { "DELETE", "POST" }, writes);
     }
 
-    [Fact]
-    public async Task Execute_UnmatchedOnlyReportsSkipWithoutRequests()
+    [Theory]
+    [InlineData(SyncActionKind.SkipPhoneNotFound)]
+    [InlineData(SyncActionKind.SkipNoProfiles)]
+    [InlineData(SyncActionKind.WarnMissingProfiles)]
+    public async Task Execute_SkipOrWarningOnlyReportsWithoutRequests(SyncActionKind kind)
     {
         using var handler = new MockHandler(_ => throw new InvalidOperationException("Unexpected mock request"));
         using var http = new HttpClient(handler);
         var reported = new List<SyncAction>();
-        await new SpondClient(http).ExecutePlanAsync([new(Date, SyncActionKind.SkipUnmatched, "Test guard", null, null)],
+        await new SpondClient(http).ExecutePlanAsync([new(Date, kind, "Test guard", null, null)],
             Group, false, Now, reported.Add);
-        Assert.Equal(SyncActionKind.SkipUnmatched, Assert.Single(reported).Kind);
+        Assert.Equal(kind, Assert.Single(reported).Kind);
     }
 
     [Theory]
