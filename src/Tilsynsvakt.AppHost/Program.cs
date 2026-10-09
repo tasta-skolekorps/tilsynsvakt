@@ -16,22 +16,18 @@ var api = builder.AddProject<Projects.Tilsynsvakt_Api>("api")
     .WithHttpEndpoint()
     .WithHttpHealthCheck("/health");
 
-var adminApiKey = builder.Configuration["Admin:ApiKey"];
-if (!string.IsNullOrWhiteSpace(adminApiKey))
+// Secret parameters publish as ACA secrets referenced via secretRef, not plain env values.
+foreach (var (configKey, envName, parameterName) in new[]
 {
-    api.WithEnvironment("Admin__ApiKey", adminApiKey);
-}
-
-var adminUsername = builder.Configuration["Admin:Username"];
-var adminPassword = builder.Configuration["Admin:Password"];
-if (!string.IsNullOrWhiteSpace(adminUsername))
+    ("Admin:ApiKey", "Admin__ApiKey", "admin-api-key"),
+    ("Admin:Username", "Admin__Username", "admin-username"),
+    ("Admin:Password", "Admin__Password", "admin-password"),
+})
 {
-    api.WithEnvironment("Admin__Username", adminUsername);
-}
-
-if (!string.IsNullOrWhiteSpace(adminPassword))
-{
-    api.WithEnvironment("Admin__Password", adminPassword);
+    if (!string.IsNullOrWhiteSpace(builder.Configuration[configKey]))
+    {
+        api.WithEnvironment(envName, builder.AddParameterFromConfiguration(parameterName, configKey, secret: true));
+    }
 }
 
 if (builder.ExecutionContext.IsPublishMode)
