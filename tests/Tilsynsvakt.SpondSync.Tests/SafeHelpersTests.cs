@@ -1,5 +1,4 @@
 using System.Net;
-using System.Reflection;
 using System.Text.Json;
 using Tilsynsvakt.SpondSync;
 
@@ -52,8 +51,8 @@ public sealed class SafeHelpersTests
 
     [Theory]
     [InlineData(null, "")]
-    [InlineData("Familien Test", " Familien Test")]
-    [InlineData("Familien Test%\r\n::error::", " Familien Test%25%0D%0A::error::")]
+    [InlineData("Familien Test", " – Familien Test")]
+    [InlineData("Familien Test%\r\n::error::", " – Familien Test%25%0D%0A::error::")]
     public void PublicName_EscapesWorkflowLineInjection(string? name, string expected) =>
         Assert.Equal(expected, FormatPublicName(name));
 
@@ -66,16 +65,10 @@ public sealed class SafeHelpersTests
         var action = Assert.Single(SyncPlanner.Plan([new(date, "taken", new Guard(1, "Familien Test", "+4790000001"))],
             [], group, new HashSet<DateOnly> { date }, new(2026, 10, 5)));
 
-        Assert.Equal(" Familien Test", FormatPublicName(action.GuardName));
+        Assert.Equal(" – Familien Test", FormatPublicName(action.GuardName));
         foreach (var privateValue in new[] { "test-parent", "test-child", "test-group", "test-subgroup", "+4790000001", "90000001" })
             Assert.DoesNotContain(privateValue, FormatPublicName(action.GuardName));
     }
 
-    private static string FormatPublicName(string? name)
-    {
-        var program = typeof(SyncPlanner).Assembly.GetType("Program", throwOnError: true)!;
-        var formatter = Assert.Single(program.GetMethods(BindingFlags.NonPublic | BindingFlags.Static),
-            method => method.Name.Contains("g__PublicName|", StringComparison.Ordinal));
-        return Assert.IsType<string>(formatter.Invoke(null, new object?[] { name }));
-    }
+    private static string FormatPublicName(string? name) => SyncReport.PublicName(name);
 }

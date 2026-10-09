@@ -61,7 +61,16 @@ or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option
 
 Run: `dotnet run --project src/Tilsynsvakt.SpondSync -c Release`.
 Missing configuration exits 1 without network access. Other errors are sanitized.
-Logs contain dates, actions, and backend guard names only. No Spond data is persisted.
+Logs contain dates, actions, field names, guardian counts and backend guard names
+only. No Spond data is persisted.
+
+Output: a header (`Tørrkjøring – ingen endringer sendes til Spond` or `Skriver til
+Spond`) with the date window, then exactly one line per date in both modes:
+`vil opprette`/`opprettet`, `vil oppdatere (felter)`/`oppdatert (felter)`,
+`vil slette`/`slettet`, `vil erstatte (ny vakt)`/`erstattet` (guard change),
+`uendret` or `ingen vakt`. Skips and missing-profile notices stay `::warning::`
+lines. A real run prints a date only after its Spond writes succeed. The run ends
+with `Oppsummering: …` counts (replacements count as updates).
 
 ## Source Verification
 

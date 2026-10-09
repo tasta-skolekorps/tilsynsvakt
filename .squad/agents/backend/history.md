@@ -40,3 +40,5 @@
 - 2026-10-05T16:20:00+02:00: Issue #41: page Spond events by ascending startTimestamp, not non-monotonic multiday end times; use pinned Olen v1.2.1 start filters/groupId with Oslo-midnight UTC bounds, max=100, inclusive overlap and ID deduplication, failing closed on descending starts or stalled full pages. Fake HTTP checks do not verify live pagination, idempotence or notifications.
 
 - 2026-10-08T17:50:00+02:00: Issue #43: `MatchGuardians` returns `GuardianMatch` (PhoneNotFound / NoProfiles / Matched + MissingProfiles) instead of null; partial profiles invite only the profiled subset (desired set = subset, so reruns compare against it) and emit a write-free `WarnMissingProfiles` action every run. Fail-closed id checks run before profile filtering.
+
+- 2026-10-09T09:00:00+02:00: Sync output is derived by pure `SyncReport.Outcomes` (one `DateOutcome` per date, merging quiet delete+create into Replace) and streamed by `SyncLog`, which prints a date only after its pending write count reaches zero; `Plan` and `ExecutePlanAsync` stay unchanged, so Spond calls are identical. `PublicName` now lives in `SyncReport` (no reflection on Program locals in tests).

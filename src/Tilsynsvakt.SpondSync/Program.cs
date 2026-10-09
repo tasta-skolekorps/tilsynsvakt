@@ -7,6 +7,7 @@ try
     var options = SyncOptions.FromEnvironment(Environment.GetEnvironmentVariable);
     var today = SyncCalendar.Today(DateTimeOffset.UtcNow);
     var dates = SyncCalendar.SelectDates(today, options.Dates);
+    Console.WriteLine(SyncReport.Header(options.DryRun, dates));
     if (dates.Count == 0) return 0;
 
     using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(8));
@@ -33,22 +34,10 @@ try
     var group = await spond.GetTargetGroupAsync(options.GroupName, options.SubgroupName, timeout.Token);
     var existing = await spond.GetEventsAsync(group.Id, dates, timeout.Token);
     var actions = SyncPlanner.Plan(roster, existing, group, dates, today);
-    await spond.ExecutePlanAsync(actions, group, options.DryRun, DateTimeOffset.UtcNow, action =>
-    {
-        var name = PublicName(action.GuardName);
-        var label = action.Kind switch
-        {
-            SyncActionKind.Create => options.DryRun ? "planlagt opprettelse" : "opprettet",
-            SyncActionKind.Update => options.DryRun ? "planlagt metadataoppdatering" : "metadata oppdatert",
-            SyncActionKind.Delete => options.DryRun ? "planlagt stille sletting" : "slettet stille",
-            SyncActionKind.SkipPhoneNotFound => "telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over",
-            SyncActionKind.SkipNoProfiles => "ingen av de foresatte har Spond-profil; vakt hoppet over",
-            _ => "én eller flere foresatte mangler Spond-profil og ble ikke invitert;"
-        };
-        var prefix = action.Kind is SyncActionKind.SkipPhoneNotFound or SyncActionKind.SkipNoProfiles
-            or SyncActionKind.WarnMissingProfiles ? "::warning::" : "";
-        Console.WriteLine($"{prefix}{action.Date:yyyy-MM-dd} {label}{name}");
-    }, timeout.Token);
+    var log = new SyncLog(SyncReport.Outcomes(actions, roster, dates, today), options.DryRun, Console.WriteLine);
+    log.Start();
+    await spond.ExecutePlanAsync(actions, group, options.DryRun, DateTimeOffset.UtcNow, log.Reported, timeout.Token);
+    log.Finish();
     return 0;
 }
 catch (SyncException exception)
@@ -61,6 +50,3 @@ catch (Exception)
     Console.Error.WriteLine("::error::Synkronisering mislyktes; ingen personopplysninger eller responsdetaljer logges.");
     return 1;
 }
-
-static string PublicName(string? name) => name is null ? "" : " " +
-    name.Replace("%", "%25").Replace("\r", "%0D").Replace("\n", "%0A");
