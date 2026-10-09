@@ -136,7 +136,7 @@ public sealed class SpondContractTests
         });
         using var http = new HttpClient(handler);
         var group = await new SpondClient(http).GetTargetGroupAsync("Test group", "Test subgroup");
-        Assert.Equal("test-profile", Assert.Single(SyncPlanner.MatchGuardians(new(1, "Test guard", "+4790000001"), group)!));
+        Assert.Equal("test-profile", Assert.Single(SyncPlanner.MatchGuardians(new(1, "Test guard", "+4790000001"), group).ProfileIds));
     }
 
     [Fact]
@@ -149,14 +149,16 @@ public sealed class SpondContractTests
             Assert.Contains("includeComments=true", query);
             Assert.Contains("includeHidden=false", query);
             Assert.Contains("addProfileInfo=true", query);
-            Assert.Contains("order=asc&max=20&minEndTimestamp=", query);
-            Assert.DoesNotContain("groupId", query);
-            Assert.DoesNotContain("minStartTimestamp", query);
-            Assert.DoesNotContain("maxStartTimestamp", query);
+            Assert.Contains("order=asc&max=100", query);
+            Assert.Contains("groupId=" + Uri.EscapeDataString(Group.Id), query);
+            Assert.Contains("minStartTimestamp=" + Uri.EscapeDataString("2026-11-25T23:00:00Z"), query);
+            Assert.Contains("maxStartTimestamp=" + Uri.EscapeDataString("2026-11-26T23:00:00Z"), query);
+            Assert.DoesNotContain("minEndTimestamp", query);
+            Assert.DoesNotContain("maxEndTimestamp", query);
             return Task.FromResult(Json(new[] { EventJson() }));
         });
         using var http = new HttpClient(handler);
-        var existing = await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now);
+        var existing = (await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now)).Owned;
         Assert.Single(existing);
         Assert.Empty(SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))], existing,
             Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now)));
@@ -198,15 +200,18 @@ public sealed class SpondContractTests
         else Assert.Equal(new[] { "DELETE", "POST" }, writes);
     }
 
-    [Fact]
-    public async Task Execute_UnmatchedOnlyReportsSkipWithoutRequests()
+    [Theory]
+    [InlineData(SyncActionKind.SkipPhoneNotFound)]
+    [InlineData(SyncActionKind.SkipNoProfiles)]
+    [InlineData(SyncActionKind.WarnMissingProfiles)]
+    public async Task Execute_SkipOrWarningOnlyReportsWithoutRequests(SyncActionKind kind)
     {
         using var handler = new MockHandler(_ => throw new InvalidOperationException("Unexpected mock request"));
         using var http = new HttpClient(handler);
         var reported = new List<SyncAction>();
-        await new SpondClient(http).ExecutePlanAsync([new(Date, SyncActionKind.SkipUnmatched, "Test guard", null, null)],
+        await new SpondClient(http).ExecutePlanAsync([new(Date, kind, "Test guard", null, null)],
             Group, false, Now, reported.Add);
-        Assert.Equal(SyncActionKind.SkipUnmatched, Assert.Single(reported).Kind);
+        Assert.Equal(kind, Assert.Single(reported).Kind);
     }
 
     [Theory]
@@ -358,37 +363,152 @@ public sealed class SpondContractTests
         return JsonSerializer.SerializeToElement(fields);
     }
 
-    [Fact]
-    public async Task ListRead_PaginatesWithInclusiveOverlapAndDeduplicates()
-    {
-        var page = Enumerable.Range(0, 20).Select(index => WithFields(EventJson("test-page-" + index),
-            ("description", "Test unowned"), ("endTimestamp", SpondPayloads.Timestamp(Desired.End.AddMinutes(index))))).ToArray();
-        var requestCount = 0;
-        using var handler = new MockHandler(request =>
-        {
-            requestCount++;
-            if (requestCount == 1) return Task.FromResult(Json(page));
-            Assert.Equal(2, requestCount);
-            Assert.Contains(Uri.EscapeDataString(SpondPayloads.Timestamp(Desired.End.AddMinutes(19))), request.RequestUri!.Query);
-            return Task.FromResult(Json(new[] { page[^1], EventJson() }));
-        });
-        using var http = new HttpClient(handler);
-        var events = await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now);
-        Assert.Equal("test-event", Assert.Single(events).Id);
-        Assert.Equal(2, requestCount);
-    }
+    private static string QueryInstant(HttpRequestMessage request, string name) => Uri.UnescapeDataString(
+        request.RequestUri!.Query.TrimStart('?').Split('&').Single(part => part.StartsWith(name + "=", StringComparison.Ordinal))[(name.Length + 1)..]);
 
-    [Fact]
-    public async Task ListRead_StalledFullBoundaryFailsClosed()
+    private static JsonElement[] FullPage(string start) => Enumerable.Range(0, 100).Select(index =>
+        WithFields(EventJson("test-page-" + index), ("description", "Test unowned"), ("startTimestamp", start))).ToArray();
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(99)]
+    public async Task ListRead_UnsortedPageUnderMaxSucceeds(int count)
     {
-        var page = Enumerable.Range(0, 20).Select(index => WithFields(EventJson("test-page-" + index),
-            ("description", "Test unowned"))).ToArray();
+        var page = Enumerable.Range(0, count).Select(index => WithFields(EventJson("test-page-" + index),
+            ("description", index == 0 ? Desired.Description : "Test unowned"),
+            ("startTimestamp", SpondPayloads.Timestamp(Desired.Start.AddMinutes(index % 2 == 0 ? index : -index))))).ToArray();
         var requests = 0;
         using var handler = new MockHandler(_ => { requests++; return Task.FromResult(Json(page)); });
         using var http = new HttpClient(handler);
-        await Assert.ThrowsAsync<SyncException>(() => new SpondClient(http).GetEventsAsync(Group.Id,
+        var events = (await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now)).Owned;
+        Assert.Equal("test-page-0", Assert.Single(events).Id);
+        Assert.Equal(1, requests);
+    }
+
+    [Fact]
+    public async Task ListRead_FullPageSplitsWindowMergesAndDeduplicates()
+    {
+        var boundary = WithFields(EventJson("test-boundary"), ("startTimestamp", "2026-11-26T11:00:00Z"));
+        var windows = new List<string>();
+        using var handler = new MockHandler(request =>
+        {
+            var min = QueryInstant(request, "minStartTimestamp");
+            var max = QueryInstant(request, "maxStartTimestamp");
+            windows.Add(min + "/" + max);
+            return Task.FromResult(Json(windows.Count switch
+            {
+                1 => FullPage(SpondPayloads.Timestamp(Desired.Start)),
+                2 => new[] { boundary },
+                _ => new[] { EventJson(), boundary }
+            }));
+        });
+        using var http = new HttpClient(handler);
+        var events = (await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now)).Owned;
+        Assert.Equal(new[] { "test-boundary", "test-event" }, events.Select(item => item.Id));
+        Assert.Equal(new[] { "2026-11-25T23:00:00Z/2026-11-26T23:00:00Z", "2026-11-25T23:00:00Z/2026-11-26T11:00:00Z",
+            "2026-11-26T11:00:00Z/2026-11-26T23:00:00Z" }, windows);
+    }
+
+    [Fact]
+    public async Task ListRead_TinyWindowStillFullFailsClosed()
+    {
+        var requests = 0;
+        using var handler = new MockHandler(request =>
+        {
+            requests++;
+            return Task.FromResult(Json(FullPage(QueryInstant(request, "minStartTimestamp"))));
+        });
+        using var http = new HttpClient(handler);
+        var error = await Assert.ThrowsAsync<SyncException>(() => new SpondClient(http).GetEventsAsync(Group.Id,
             new HashSet<DateOnly> { Date }, now: Now));
-        Assert.Equal(2, requests);
+        Assert.Equal("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.", error.Message);
+        Assert.Equal(6, requests);
+    }
+
+    [Fact]
+    public async Task ListRead_RequestCapFailsClosed()
+    {
+        var requests = 0;
+        using var handler = new MockHandler(request =>
+        {
+            requests++;
+            var min = QueryInstant(request, "minStartTimestamp");
+            var wide = DateTimeOffset.Parse(QueryInstant(request, "maxStartTimestamp")) - DateTimeOffset.Parse(min) > TimeSpan.FromHours(2);
+            return Task.FromResult(Json(wide ? FullPage(min) : System.Array.Empty<JsonElement>()));
+        });
+        using var http = new HttpClient(handler);
+        var error = await Assert.ThrowsAsync<SyncException>(() => new SpondClient(http).GetEventsAsync(Group.Id,
+            new HashSet<DateOnly> { new(2026, 11, 24), Date }, now: Now));
+        Assert.Equal("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.", error.Message);
+        Assert.Equal(64, requests);
+    }
+
+    [Theory]
+    [InlineData("2026-09-01", "2026-09-03", "2026-08-31T22:00:00Z", "2026-09-03T22:00:00Z")]
+    [InlineData("2026-11-24", "2026-11-26", "2026-11-23T23:00:00Z", "2026-11-26T23:00:00Z")]
+    [InlineData("2026-10-24", "2026-10-25", "2026-10-23T22:00:00Z", "2026-10-25T23:00:00Z")]
+    public async Task ListRead_BoundsStartWindowAtOsloMidnights(string first, string last, string minimum, string maximum)
+    {
+        using var handler = new MockHandler(request =>
+        {
+            var query = request.RequestUri!.Query;
+            Assert.Contains("minStartTimestamp=" + Uri.EscapeDataString(minimum), query);
+            Assert.Contains("maxStartTimestamp=" + Uri.EscapeDataString(maximum), query);
+            Assert.Contains("groupId=test%2Fgroup", query);
+            Assert.Contains("scheduled=true", query);
+            Assert.Contains("max=100", query);
+            return Task.FromResult(Json(System.Array.Empty<object>()));
+        });
+        using var http = new HttpClient(handler);
+        Assert.Empty((await new SpondClient(http).GetEventsAsync("test/group",
+            new HashSet<DateOnly> { DateOnly.ParseExact(last, "yyyy-MM-dd"), DateOnly.ParseExact(first, "yyyy-MM-dd") }, now: Now)).Owned);
+    }
+
+    [Fact]
+    public async Task ListRead_CollectsManualDatesAndIgnoresOtherHeadingsGroupsAndMarkers()
+    {
+        var other = new DateOnly(2026, 11, 24);
+        var third = new DateOnly(2026, 11, 25);
+        string At(DateOnly day) => SpondPayloads.Timestamp(SyncCalendar.At(day, new TimeOnly(16, 45)));
+        var manual = WithFields(EventJson("test-manual"), ("description", "Test manual"));
+        var pastManualToday = WithFields(EventJson("test-manual-today"), ("description", null),
+            ("startTimestamp", SpondPayloads.Timestamp(Now.AddHours(-1))));
+        var otherHeading = WithFields(EventJson("test-heading", heading: "Tilsynsvakt Tasta skole"),
+            ("description", "Test manual"), ("startTimestamp", At(other)));
+        var otherGroup = WithFields(EventJson("test-group-other"), ("description", "Test manual"),
+            ("startTimestamp", At(third)), ("recipients", new { group = new { id = "test-other-group" } }));
+        using var handler = new MockHandler(_ => Task.FromResult(Json(new[] { EventJson(), manual, pastManualToday, otherHeading, otherGroup })));
+        using var http = new HttpClient(handler);
+        var today = SyncCalendar.Today(Now);
+        var listing = await new SpondClient(http).GetEventsAsync(Group.Id,
+            new HashSet<DateOnly> { today, other, third, Date }, now: Now);
+        Assert.Equal("test-event", Assert.Single(listing.Owned).Id);
+        Assert.Equal(new[] { today, Date }, listing.ManualDates.Order());
+
+        var markerOnly = await new SpondClient(new HttpClient(new MockHandler(_ => Task.FromResult(Json(new[] { EventJson() })))))
+            .GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now);
+        Assert.Empty(markerOnly.ManualDates);
+
+        var guard = new Guard(1, "Test guard", "+4790000001");
+        var actions = SyncPlanner.Plan([new(other, "taken", guard), new(third, "taken", guard)], [], Group,
+            new HashSet<DateOnly> { other, third }, today, listing.ManualDates);
+        Assert.All(actions, action => Assert.Equal(SyncActionKind.Create, action.Kind));
+        Assert.Equal(2, actions.Count);
+    }
+
+    [Fact]
+    public async Task Execute_ManualSkipMakesNoRequestsAndRefusesWritesOnSameDate()
+    {
+        var requests = 0;
+        using var handler = new MockHandler(_ => { requests++; throw new InvalidOperationException("Unexpected mock request"); });
+        using var http = new HttpClient(handler);
+        var skip = new SyncAction(Date, SyncActionKind.SkipManualEvent, "Test guard", null, null);
+        var reported = new List<SyncAction>();
+        await new SpondClient(http).ExecutePlanAsync([skip], Group, false, Now, reported.Add);
+        Assert.Equal(skip, Assert.Single(reported));
+        await Assert.ThrowsAsync<SyncException>(() => new SpondClient(http).ExecutePlanAsync(
+            [skip, new(Date, SyncActionKind.Create, "Test guard", null, Desired)], Group, false, Now, _ => { }));
+        Assert.Equal(0, requests);
     }
 
     [Fact]

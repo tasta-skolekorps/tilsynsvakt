@@ -67,10 +67,10 @@ jobs:
             fi
           done
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.run_sync == 'true'
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.gate.outputs.run_sync == 'true'
         with:
           dotnet-version: 10.0.x
@@ -83,6 +83,6 @@ jobs:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
           SPOND_GROUP_NAME: Tasta Skolekorps - Medlemmer
           SPOND_SUBGROUP_NAME: Tilsynsvakt
-          SPOND_SYNC_DATES: ${{ vars.SPOND_SYNC_DATES || '2026-11-26' }}
+          SPOND_SYNC_DATES: ${{ vars.SPOND_SYNC_DATES }}
           DRY_RUN: ${{ steps.gate.outputs.dry_run }}
         run: dotnet run --project src/Tilsynsvakt.SpondSync -c Release

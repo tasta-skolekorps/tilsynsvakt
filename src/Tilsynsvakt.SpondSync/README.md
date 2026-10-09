@@ -3,20 +3,32 @@
 This .NET 10 console tool reads the backend roster and synchronizes owned Spond
 events using the user-supplied schema verified on 05.10.2026. `DRY_RUN` defaults
 to `true`; explicit `false` enables creation, quiet deletion and metadata-only
-updates. Empty plans and unmatched/missing-profile skips exit 0. No application
+updates. Empty plans and phone-not-found/no-profile skips exit 0. No application
 or live service was run while implementing these contracts; tests use local mocks.
 
 ## Current Contract
 
 - List `/core/v1/sponds` with `includeComments=true`, `includeHidden=false`,
-  `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=20`, and
-  `minEndTimestamp`. Pagination overlaps the last end timestamp and deduplicates
-  event IDs; a full stalled boundary or non-monotonic end timestamps fails closed
-  rather than skipping events with tied timestamps. No invented offset/cursor.
+  `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=100`, `groupId`,
+  `minStartTimestamp`, and `maxStartTimestamp`. The start window runs from the
+  earliest sync date's Oslo midnight to midnight after the latest sync date,
+  converted to UTC. Spond does not sort results by start despite `order=asc`, so
+  listing never relies on ordering: a page with fewer than 100 events is complete;
+  a full page splits the start window into two halves that are queried
+  recursively and deduplicated by event ID. A full window of 1 hour or less, more
+  than 64 list requests, or a start outside the queried window fails closed.
+  Multiday events need not have ordered end times.
+  Client-side group, ownership-marker and date checks remain required.
+  Olen/Spond v1.2.1 `get_events` verifies the start filters, `groupId`, `max`,
+  `scheduled` and `includeHidden`; `includeComments`, `addProfileInfo` and `order`
+  retain the earlier user-established verification, not evidence from that source.
 - Match normalized backend phones to guardians across every matching child whose
-  `member.subGroups` contains the target subgroup ID string. Invite all of those
-  guardians by profile ID, deduplicate shared profiles, and never invite children.
-  Any required missing profile skips the whole shift with a sanitized warning.
+  `member.subGroups` contains the target subgroup ID string. Invite those
+  guardians that have a Spond profile ID, deduplicate shared profiles, and never
+  invite children. Guardians without a profile are not invited and produce a
+  sanitized warning; the shift is skipped only when the phone matches no guardian
+  in the subgroup or none of the matched guardians has a profile, each with its
+  own sanitized warning reason.
 - Create `POST /core/v1/sponds`: guardian objects contain `email`, `phoneNumber`,
   `profileId`; `groupMembers` is empty, and create subgroup IDs are strings.
   Owner comes only from `/core/v1/profile.id`. Exact heading/description/marker,
@@ -31,6 +43,13 @@ or live service was run while implementing these contracts; tests use local mock
 - Explicit guardian `profileId` readback produces a normalized state for local
   idempotence. The supplied GET inventory does not establish guardian item fields;
   unreadable recipient state fails closed, rather than claiming live idempotence.
+- Manual events: a listed event without a sync marker, with heading exactly
+  `Tilsynsvakt Tasta Skole`, `recipients.group.id` equal to the target group and an
+  Oslo start date inside the sync dates (including already-started events today)
+  marks that date as manual. Manual dates get `SkipManualEvent`: no create, update
+  or delete, even when an owned event exists on the same date, and a real run makes
+  no Spond calls for that date. Manual events are never modified; delete them in
+  Spond to let the sync take over that date.
 
 **Unverified:** location `{feature}` without `id` needs first-real-run confirmation;
 `inviteTime` on CREATE is not established by its observed event/update usage;
@@ -45,14 +64,25 @@ or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option
 - `API_BASE_URL`: required HTTP(S) origin, without credentials, path, query, or fragment.
 - `SPOND_GROUP_NAME`: defaults to `Tasta Skolekorps - Medlemmer`.
 - `SPOND_SUBGROUP_NAME`: defaults to `Tilsynsvakt`.
-- `SPOND_SYNC_DATES`: optional comma-separated `yyyy-MM-dd`; pilot `2026-11-26`.
-  Empty means the full current period. Limits intersect today through 29 May or
-  28 November. Outside 5 January-29 May / 1 September-28 November, no dates apply.
+- `SPOND_SYNC_DATES`: optional limit, comma-separated `yyyy-MM-dd`. Unset or empty
+  (the default) syncs the full window: today through the end of the current period
+  (29 May or 28 November). A set limit intersects that window. Outside 5 January-29 May / 1 September-28 November, no dates apply.
 - `DRY_RUN`: `true` or `false`, case-insensitive; defaults to `true`.
 
 Run: `dotnet run --project src/Tilsynsvakt.SpondSync -c Release`.
 Missing configuration exits 1 without network access. Other errors are sanitized.
-Logs contain dates, actions, and backend guard names only. No Spond data is persisted.
+Logs contain dates, actions, field names, guardian counts and backend guard names
+only. No Spond data is persisted.
+
+Output: a header (`Tørrkjøring – ingen endringer sendes til Spond` or `Skriver til
+Spond`) with the date window, then exactly one line per date in both modes:
+`vil opprette`/`opprettet`, `vil oppdatere (felter)`/`oppdatert (felter)`,
+`vil slette`/`slettet`, `vil erstatte (ny vakt)`/`erstattet` (guard change),
+`uendret` or `ingen vakt`. Skips and missing-profile notices stay `::warning::`
+lines; a manual-event date prints `::warning::<dato> manuelt arrangement finnes;
+vakt hoppet over – <navn>` (or `…; ingen vakt` without a taken shift) and counts
+as `hoppet over`. A real run prints a date only after its Spond writes succeed. The run ends
+with `Oppsummering: …` counts (replacements count as updates).
 
 ## Source Verification
 
@@ -243,5 +273,5 @@ without resetting responses/reinviting unchanged guardians, scheduled invitation
 write/readback (seven days before), create/delete contracts, and standard
 unanswered plus extra three-day reminder semantics. No dangerous payload is
 inferred, no credentials requested, and no production readiness is claimed.
-Environment, pilot `SPOND_SYNC_DATES=2026-11-26`, event location and public-log
-contracts are unchanged. Unmatched shifts still skip without deleting owned events.
+Environment (default full window; `SPOND_SYNC_DATES` is an optional limit), event
+location and public-log contracts are unchanged. Unmatched shifts still skip without deleting owned events.
