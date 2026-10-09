@@ -10,6 +10,8 @@ const guard = { id: 1, name: "Testvakt med et langt visningsnavn", phone: "", ac
 const dutyList = {
   season: "autumn", year: 2026, from: "2026-09-01", to: "2026-11-28",
   duties: [{ date: "2026-10-06", dayOfWeek: "tuesday", status: "taken", guard,
+    scheduledStart: "16:45", endTime: "22:00", hasRecordedCheckOut: false, durationHours: 5.5 },
+  { date: "2026-10-05", dayOfWeek: "monday", status: "open", guard: null,
     scheduledStart: "16:45", endTime: "22:00", hasRecordedCheckOut: false, durationHours: 5.5 }],
   totals: [{ guard, dutyCount: 1, totalHours: 5.5, dutiesWithoutCheckOut: 1 }],
 };
