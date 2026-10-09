@@ -9,6 +9,8 @@ public sealed class SpondClient(HttpClient http)
 {
     public static readonly Uri BaseUrl = new("https://api.spond.com/core/v1/");
     private const int EventLimit = 100;
+    private const int MaxListRequests = 64;
+    private static readonly TimeSpan MinListWindow = TimeSpan.FromHours(1);
 
     public async Task LoginAsync(string username, string password, CancellationToken cancellationToken = default)
     {
@@ -52,21 +54,32 @@ public sealed class SpondClient(HttpClient http)
     {
         var events = new Dictionary<string, ExistingEvent>(StringComparer.Ordinal);
         if (dates.Count == 0) return [];
-        var cursor = SyncCalendar.At(dates.Min(), TimeOnly.MinValue);
-        var end = SyncCalendar.At(dates.Max().AddDays(1), TimeOnly.MinValue);
-        for (var pageNumber = 0; pageNumber < 1000; pageNumber++)
+        // Spond ignores order=asc, so a full page is split by time window instead of paged by cursor.
+        var windows = new Stack<(DateTimeOffset Min, DateTimeOffset Max)>();
+        windows.Push((SyncCalendar.At(dates.Min(), TimeOnly.MinValue), SyncCalendar.At(dates.Max().AddDays(1), TimeOnly.MinValue)));
+        var requests = 0;
+        while (windows.TryPop(out var window))
         {
+            if (++requests > MaxListRequests)
+                throw new SyncException("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.");
             var query = "sponds?includeComments=true&includeHidden=false&addProfileInfo=true&scheduled=true" +
                 $"&order=asc&max={EventLimit}&groupId={Uri.EscapeDataString(groupId)}" +
-                $"&minStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(cursor))}" +
-                $"&maxStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(end))}";
+                $"&minStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(window.Min))}" +
+                $"&maxStartTimestamp={Uri.EscapeDataString(SpondPayloads.Timestamp(window.Max))}";
             using var response = await http.GetAsync(new Uri(BaseUrl, query), cancellationToken);
             using var document = await ReadAsync(response, cancellationToken);
             var page = Array(document.RootElement);
-            var starts = page.Select(item => Instant(item, "startTimestamp")).ToArray();
-            if (!starts.SequenceEqual(starts.Order()) || (starts.Length > 0 && starts[0] < cursor) ||
-                (page.Length >= EventLimit && starts[^1] <= cursor))
+            if (page.Any(item => Instant(item, "startTimestamp") is var start && (start < window.Min || start > window.Max)))
                 throw new SyncException("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.");
+            if (page.Length >= EventLimit)
+            {
+                if (window.Max - window.Min <= MinListWindow)
+                    throw new SyncException("Arrangementlisten kan ikke pagineres sikkert; ingen endringer sendt.");
+                var middle = window.Min.AddSeconds(Math.Floor((window.Max - window.Min).TotalSeconds / 2));
+                windows.Push((middle, window.Max));
+                windows.Push((window.Min, middle));
+                continue;
+            }
             foreach (var item in page)
             {
                 var description = OptionalText(item, "description");
@@ -80,10 +93,8 @@ public sealed class SpondClient(HttpClient http)
                 var id = Text(item, "id");
                 events[id] = new ExistingEvent(id, description, ReadState(item));
             }
-            if (page.Length < EventLimit) return events.Values.ToArray();
-            cursor = starts[^1];
         }
-        throw new SyncException("Arrangementlisten kan være avkortet; ingen endringer sendt.");
+        return events.Values.ToArray();
     }
 
     internal static DateTimeOffset Instant(JsonElement item, string field) =>

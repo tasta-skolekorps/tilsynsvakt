@@ -12,9 +12,12 @@ or live service was run while implementing these contracts; tests use local mock
   `addProfileInfo=true`, `scheduled=true`, `order=asc`, `max=100`, `groupId`,
   `minStartTimestamp`, and `maxStartTimestamp`. The start window runs from the
   earliest sync date's Oslo midnight to midnight after the latest sync date,
-  converted to UTC. Pagination overlaps the last start timestamp and deduplicates
-  event IDs; descending starts, starts before the cursor, or a full page without
-  cursor progress fail closed. Multiday events need not have ordered end times.
+  converted to UTC. Spond does not sort results by start despite `order=asc`, so
+  listing never relies on ordering: a page with fewer than 100 events is complete;
+  a full page splits the start window into two halves that are queried
+  recursively and deduplicated by event ID. A full window of 1 hour or less, more
+  than 64 list requests, or a start outside the queried window fails closed.
+  Multiday events need not have ordered end times.
   Client-side group, ownership-marker and date checks remain required.
   Olen/Spond v1.2.1 `get_events` verifies the start filters, `groupId`, `max`,
   `scheduled` and `includeHidden`; `includeComments`, `addProfileInfo` and `order`

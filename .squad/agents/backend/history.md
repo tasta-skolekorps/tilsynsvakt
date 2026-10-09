@@ -42,3 +42,5 @@
 - 2026-10-08T17:50:00+02:00: Issue #43: `MatchGuardians` returns `GuardianMatch` (PhoneNotFound / NoProfiles / Matched + MissingProfiles) instead of null; partial profiles invite only the profiled subset (desired set = subset, so reruns compare against it) and emit a write-free `WarnMissingProfiles` action every run. Fail-closed id checks run before profile filtering.
 
 - 2026-10-09T09:00:00+02:00: Sync output is derived by pure `SyncReport.Outcomes` (one `DateOutcome` per date, merging quiet delete+create into Replace) and streamed by `SyncLog`, which prints a date only after its pending write count reaches zero; `Plan` and `ExecutePlanAsync` stay unchanged, so Spond calls are identical. `PublicName` now lives in `SyncReport` (no reflection on Program locals in tests).
+
+- 2026-10-09T09:45:00+02:00: Live Spond list results are NOT sorted by start despite `order=asc` (58-event page unsorted); never page by cursor. `GetEventsAsync` treats a sub-max page as complete and splits a full page's start window in halves (whole seconds, stack, ID dedupe), failing closed at ≤1 h full windows, >64 requests or starts outside the window.
