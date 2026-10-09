@@ -720,6 +720,11 @@ is verified. Event guardian item fields were not provided: local readback suppor
 explicit profileId and fails closed otherwise; live full-sync idempotence is not
 claimed. Notification/response preservation and server acceptance remain untested.
 
+### 2026-10-09T09:30:00+02:00: User directive (Spond sync scope)
+**By:** Leif Bjarte Johansson (via Copilot)
+**What:** Remove the one-event pilot limit. The workflow no longer falls back to `2026-11-26`; the sync covers today through the end of the current period. `SPOND_SYNC_DATES` remains an optional repository variable to limit dates. Supersedes the pilot-scope points in earlier Spond entries.
+**Why:** Pilot event on 26.11 was created and verified (issue #39 follow-up, PR #42).
+
 ### 2026-10-05T15:45:00+02:00: User directive (Spond reminder and location)
 **By:** Leif Bjarte Johansson (via Copilot)
 **What:** Accept `REMIND_48H_BEFORE` as the only automatic reminder; the extra 3-day reminder is dropped (Spond's UI does not offer it). Accept location feature text «Tasta skole, Randabergveien, Stavanger» without location id; the first non-dry run confirms it.

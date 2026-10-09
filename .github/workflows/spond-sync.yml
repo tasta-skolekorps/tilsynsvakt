@@ -83,6 +83,6 @@ jobs:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
           SPOND_GROUP_NAME: Tasta Skolekorps - Medlemmer
           SPOND_SUBGROUP_NAME: Tilsynsvakt
-          SPOND_SYNC_DATES: ${{ vars.SPOND_SYNC_DATES || '2026-11-26' }}
+          SPOND_SYNC_DATES: ${{ vars.SPOND_SYNC_DATES }}
           DRY_RUN: ${{ steps.gate.outputs.dry_run }}
         run: dotnet run --project src/Tilsynsvakt.SpondSync -c Release

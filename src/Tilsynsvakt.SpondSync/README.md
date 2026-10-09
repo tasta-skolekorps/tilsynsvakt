@@ -54,9 +54,9 @@ or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option
 - `API_BASE_URL`: required HTTP(S) origin, without credentials, path, query, or fragment.
 - `SPOND_GROUP_NAME`: defaults to `Tasta Skolekorps - Medlemmer`.
 - `SPOND_SUBGROUP_NAME`: defaults to `Tilsynsvakt`.
-- `SPOND_SYNC_DATES`: optional comma-separated `yyyy-MM-dd`; pilot `2026-11-26`.
-  Empty means the full current period. Limits intersect today through 29 May or
-  28 November. Outside 5 January-29 May / 1 September-28 November, no dates apply.
+- `SPOND_SYNC_DATES`: optional limit, comma-separated `yyyy-MM-dd`. Unset or empty
+  (the default) syncs the full window: today through the end of the current period
+  (29 May or 28 November). A set limit intersects that window. Outside 5 January-29 May / 1 September-28 November, no dates apply.
 - `DRY_RUN`: `true` or `false`, case-insensitive; defaults to `true`.
 
 Run: `dotnet run --project src/Tilsynsvakt.SpondSync -c Release`.
@@ -261,5 +261,5 @@ without resetting responses/reinviting unchanged guardians, scheduled invitation
 write/readback (seven days before), create/delete contracts, and standard
 unanswered plus extra three-day reminder semantics. No dangerous payload is
 inferred, no credentials requested, and no production readiness is claimed.
-Environment, pilot `SPOND_SYNC_DATES=2026-11-26`, event location and public-log
-contracts are unchanged. Unmatched shifts still skip without deleting owned events.
+Environment (default full window; `SPOND_SYNC_DATES` is an optional limit), event
+location and public-log contracts are unchanged. Unmatched shifts still skip without deleting owned events.
