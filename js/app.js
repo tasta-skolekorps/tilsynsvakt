@@ -224,7 +224,10 @@ async function loadGuards() {
 
 async function loadShifts({ message } = {}) {
   const from = todayIso();
-  const until = new Date(dateFromIso(from).getTime() + 89 * 86400000).toISOString().slice(0, 10);
+  const windowEnd = new Date(dateFromIso(from).getTime() + 89 * 86400000).toISOString().slice(0, 10);
+  // Only the current calendar year's shifts are published; later years are added by the board.
+  const yearEnd = `${from.slice(0, 4)}-12-31`;
+  const until = windowEnd < yearEnd ? windowEnd : yearEnd;
   for (const container of [elements.myShifts, elements.allShifts]) {
     container.replaceChildren(node("p", "loading", "Laster vaktliste …"));
   }

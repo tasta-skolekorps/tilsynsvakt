@@ -15,4 +15,6 @@
 - **2026-10-03:** `Frontend:Origin` must be set to the GitHub Pages origin `https://tasta-skolekorps.github.io`; it is not configured in API `appsettings.json`. `web/config.js` carries the deployment-overwritten API URL. The published 2025–2026 usage plan is date-bounded and should not be presented as current beyond 29.05.2026.
 - **2026-10-03:** Local checks passed for JavaScript syntax, JSON parsing, VS Code diagnostics, and HTTP delivery of all static assets. Live API smoke test was unavailable at `127.0.0.1:5187`.
 
+- **2026-10-09:** `loadShifts()` caps `to` at 31.12 of the current Oslo year so the public site only shows the current year's shifts; every roster view reads `state.shifts`, so the single clamp covers all of them.
+
 📌 Team update (2026-10-03T22:48:50.1676592+02:00): Azure Table Storage is the selected roster persistence; SQLite has been removed from the implementation. The API contract remains under `/api`, Scalar is available at `/scalar`, and CORS uses the configured GitHub Pages frontend origin.
