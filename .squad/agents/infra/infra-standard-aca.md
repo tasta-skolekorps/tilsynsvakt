@@ -20,7 +20,9 @@ Configure the container with these exact environment-variable names:
 | `Storage__TableServiceUri` | `https://<account>.table.core.windows.net/` for the selected account |
 | `Storage__TableName` | `Tilsynsvakt` |
 | `Storage__CreateTable` | `false` in ACA; create the table before rollout |
-| `Admin__ApiKey` | ACA secret reference; never store the key in repository files |
+| `Admin__ApiKey` | ACA secret reference from the `ADMIN_API_KEY` Actions secret; never store the key in repository files or Actions variables |
+| `Admin__Username` | ACA secret reference from the `ADMIN_USERNAME` Actions secret |
+| `Admin__Password` | ACA secret reference from the `ADMIN_PASSWORD` Actions secret |
 | `Frontend__Origin` | Exact GitHub Pages origin, without a path |
 
 The API obtains table data-plane access through the ACA system identity, not a storage connection string. For local Aspire development, the AppHost's `tables` reference supplies `TABLES_CONNECTIONSTRING` from Azurite; direct API runs use .NET User Secrets for `Storage:ConnectionString` with the Azurite development connection. Do not commit that local setting or put a real account key in AppHost settings, source, or frontend files.

@@ -33,10 +33,22 @@ jobs:
       AZURE__LOCATION: ${{ vars.AZURE_LOCATION }}
       AZURE__RESOURCEGROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       Frontend__Origin: ${{ vars.FRONTEND_ORIGIN }}
-      Admin__ApiKey: ${{ vars.ADMIN_API_KEY }}
-      Admin__Username: ${{ vars.ADMIN_USERNAME }}
-      Admin__Password: ${{ vars.ADMIN_PASSWORD }}
     steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for required in ADMIN_API_KEY ADMIN_USERNAME ADMIN_PASSWORD; do
+            if [[ -z "${!required}" ]]; then
+              echo "::error::Mangler obligatorisk hemmelighet: $required"
+              exit 1
+            fi
+          done
+
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
@@ -55,4 +67,8 @@ jobs:
           echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
 
       - name: Deploy
+        env:
+          Admin__ApiKey: ${{ secrets.ADMIN_API_KEY }}
+          Admin__Username: ${{ secrets.ADMIN_USERNAME }}
+          Admin__Password: ${{ secrets.ADMIN_PASSWORD }}
         run: aspire deploy --non-interactive
