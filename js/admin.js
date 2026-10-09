@@ -226,7 +226,8 @@ function renderTotals(totals) {
   `;
 }
 
-function renderDuties(duties) {
+function renderDuties(allDuties) {
+  const duties = allDuties.filter(duty => duty.dayOfWeek !== "monday");
   if (!duties.length) {
     dutiesElement.innerHTML = '<p class="empty-state">Fant ingen vakter for valgt sesong.</p>';
     return;
