@@ -49,11 +49,12 @@ public sealed class SpondClient(HttpClient http)
         return new TargetGroup(Text(group, "id"), Text(subgroups[0], "id"), members);
     }
 
-    public async Task<IReadOnlyList<ExistingEvent>> GetEventsAsync(string groupId,
+    public async Task<EventListing> GetEventsAsync(string groupId,
         IReadOnlySet<DateOnly> dates, CancellationToken cancellationToken = default, DateTimeOffset? now = null)
     {
         var events = new Dictionary<string, ExistingEvent>(StringComparer.Ordinal);
-        if (dates.Count == 0) return [];
+        var manualDates = new HashSet<DateOnly>();
+        if (dates.Count == 0) return new([], manualDates);
         // Spond ignores order=asc, so a full page is split by time window instead of paged by cursor.
         var windows = new Stack<(DateTimeOffset Min, DateTimeOffset Max)>();
         windows.Push((SyncCalendar.At(dates.Min(), TimeOnly.MinValue), SyncCalendar.At(dates.Max().AddDays(1), TimeOnly.MinValue)));
@@ -84,7 +85,16 @@ public sealed class SpondClient(HttpClient http)
             {
                 var description = OptionalText(item, "description");
                 var date = SyncPlanner.OwnedDate(description);
-                if (date is null || !dates.Contains(date.Value)) continue;
+                if (date is null)
+                {
+                    // Manually created events are never modified; their dates are skipped, even after start.
+                    if (OptionalText(item, "heading") == SyncPlanner.Heading &&
+                        Text(Property(Property(item, "recipients"), "group"), "id") == groupId &&
+                        SyncCalendar.Today(Instant(item, "startTimestamp")) is var manualDate && dates.Contains(manualDate))
+                        manualDates.Add(manualDate);
+                    continue;
+                }
+                if (!dates.Contains(date.Value)) continue;
                 if (Text(Property(Property(item, "recipients"), "group"), "id") != groupId) continue;
                 var start = Instant(item, "startTimestamp");
                 if (start <= (now ?? DateTimeOffset.UtcNow)) continue;
@@ -94,7 +104,7 @@ public sealed class SpondClient(HttpClient http)
                 events[id] = new ExistingEvent(id, description, ReadState(item));
             }
         }
-        return events.Values.ToArray();
+        return new(events.Values.ToArray(), manualDates);
     }
 
     internal static DateTimeOffset Instant(JsonElement item, string field) =>
@@ -148,6 +158,9 @@ public sealed class SpondClient(HttpClient http)
             foreach (var action in actions) report(action);
             return;
         }
+        if (actions.Any(action => action.Kind is SyncActionKind.Create or SyncActionKind.Update or SyncActionKind.Delete &&
+            actions.Any(skip => skip.Kind == SyncActionKind.SkipManualEvent && skip.Date == action.Date)))
+            throw new SyncException("Manuelt arrangement på en dato med planlagte endringer; ingen endringer sendt.");
         var owner = actions.Any(action => action.Kind == SyncActionKind.Create)
             ? await GetOwnerProfileIdAsync(cancellationToken) : null;
         var creates = new Dictionary<DateOnly, JsonElement>();

@@ -138,6 +138,26 @@ public sealed class SyncReportTests
     }
 
     [Fact]
+    public void ManualEvent_WarnsAndCountsAsSkipped()
+    {
+        RosterShift[] roster = [new(D(17), "taken", Kari), new(D(18), "open", null), new(D(19), "taken", Kari)];
+        var dates = new HashSet<DateOnly> { D(17), D(18), D(19) };
+        var actions = SyncPlanner.Plan(roster, [], Group, dates, Today, new HashSet<DateOnly> { D(17), D(18) });
+        var lines = new List<string>();
+        var log = new SyncLog(SyncReport.Outcomes(actions, roster, dates, Today), true, lines.Add);
+        log.Start();
+        foreach (var action in actions) log.Reported(action);
+        log.Finish();
+        Assert.Equal(new[]
+        {
+            "::warning::2026-11-17 manuelt arrangement finnes; vakt hoppet over – Kari Test",
+            "::warning::2026-11-18 manuelt arrangement finnes; ingen vakt",
+            "2026-11-19 vil opprette – Kari Test",
+            "Oppsummering: vil opprette 1, vil oppdatere 0, vil slette 0, 0 uendret, 2 hoppet over"
+        }, lines);
+    }
+
+    [Fact]
     public void Header_ShowsModeAndWindow()
     {
         var dates = new HashSet<DateOnly> { D(26), D(17) };

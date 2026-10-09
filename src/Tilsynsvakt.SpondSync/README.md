@@ -43,6 +43,13 @@ or live service was run while implementing these contracts; tests use local mock
 - Explicit guardian `profileId` readback produces a normalized state for local
   idempotence. The supplied GET inventory does not establish guardian item fields;
   unreadable recipient state fails closed, rather than claiming live idempotence.
+- Manual events: a listed event without a sync marker, with heading exactly
+  `Tilsynsvakt Tasta Skole`, `recipients.group.id` equal to the target group and an
+  Oslo start date inside the sync dates (including already-started events today)
+  marks that date as manual. Manual dates get `SkipManualEvent`: no create, update
+  or delete, even when an owned event exists on the same date, and a real run makes
+  no Spond calls for that date. Manual events are never modified; delete them in
+  Spond to let the sync take over that date.
 
 **Unverified:** location `{feature}` without `id` needs first-real-run confirmation;
 `inviteTime` on CREATE is not established by its observed event/update usage;
@@ -72,7 +79,9 @@ Spond`) with the date window, then exactly one line per date in both modes:
 `vil opprette`/`opprettet`, `vil oppdatere (felter)`/`oppdatert (felter)`,
 `vil slette`/`slettet`, `vil erstatte (ny vakt)`/`erstattet` (guard change),
 `uendret` or `ingen vakt`. Skips and missing-profile notices stay `::warning::`
-lines. A real run prints a date only after its Spond writes succeed. The run ends
+lines; a manual-event date prints `::warning::<dato> manuelt arrangement finnes;
+vakt hoppet over – <navn>` (or `…; ingen vakt` without a taken shift) and counts
+as `hoppet over`. A real run prints a date only after its Spond writes succeed. The run ends
 with `Oppsummering: …` counts (replacements count as updates).
 
 ## Source Verification

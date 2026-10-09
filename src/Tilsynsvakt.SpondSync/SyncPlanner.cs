@@ -12,7 +12,8 @@ public sealed record EventSpec(
     DateTimeOffset Start, DateTimeOffset End, DateTimeOffset InviteAt,
     string GroupId, string SubgroupId, IReadOnlyList<string> GuardianIds, bool AutoAccept = false);
 public sealed record ExistingEvent(string Id, string? Description, EventSpec? VerifiedState);
-public enum SyncActionKind { Create, Update, Delete, SkipPhoneNotFound, SkipNoProfiles, WarnMissingProfiles }
+public sealed record EventListing(IReadOnlyList<ExistingEvent> Owned, IReadOnlySet<DateOnly> ManualDates);
+public enum SyncActionKind { Create, Update, Delete, SkipPhoneNotFound, SkipNoProfiles, WarnMissingProfiles, SkipManualEvent }
 public enum GuardianMatchOutcome { Matched, PhoneNotFound, NoProfiles }
 public sealed record GuardianMatch(GuardianMatchOutcome Outcome, IReadOnlyList<string> ProfileIds, bool MissingProfiles);
 public sealed record SyncAction(DateOnly Date, SyncActionKind Kind, string? GuardName,
@@ -112,7 +113,7 @@ public static class SyncPlanner
 
     public static IReadOnlyList<SyncAction> Plan(
         IReadOnlyList<RosterShift> roster, IReadOnlyList<ExistingEvent> existing,
-        TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today)
+        TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today, IReadOnlySet<DateOnly>? manualDates = null)
     {
         var selected = dates.Where(date => date >= today).ToHashSet();
         var shifts = roster.Where(shift => selected.Contains(shift.Date)).ToArray();
@@ -127,6 +128,12 @@ public static class SyncPlanner
         {
             var shift = shifts.SingleOrDefault(item => item.Date == date);
             var current = owned.SingleOrDefault(item => item.Date == date).Event;
+            if (manualDates?.Contains(date) == true)
+            {
+                actions.Add(new(date, SyncActionKind.SkipManualEvent,
+                    shift?.Status == "taken" ? shift.Guard?.Name : null, null, null));
+                continue;
+            }
             if (shift is null && current is not null)
                 throw new SyncException("Vakt-API-et mangler en eid arrangementsdato; sletting kan ikke planlegges sikkert.");
             if (shift is null || shift.Status == "open")

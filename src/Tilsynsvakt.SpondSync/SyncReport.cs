@@ -24,11 +24,13 @@ public static class SyncReport
             var name = day.Select(action => action.GuardName).FirstOrDefault(item => item is not null)
                 ?? (shift?.Status == "taken" ? shift.Guard?.Name : null);
             var warning = day.FirstOrDefault(action => action.Kind is SyncActionKind.SkipPhoneNotFound
-                or SyncActionKind.SkipNoProfiles or SyncActionKind.WarnMissingProfiles)?.Kind;
+                or SyncActionKind.SkipNoProfiles or SyncActionKind.WarnMissingProfiles
+                or SyncActionKind.SkipManualEvent)?.Kind;
             var create = day.Any(action => action.Kind == SyncActionKind.Create);
             var delete = day.Any(action => action.Kind == SyncActionKind.Delete);
             var update = day.FirstOrDefault(action => action.Kind == SyncActionKind.Update);
             var kind = warning is SyncActionKind.SkipPhoneNotFound or SyncActionKind.SkipNoProfiles
+                or SyncActionKind.SkipManualEvent
                 ? DateOutcomeKind.Skipped
                 : create && delete ? DateOutcomeKind.Replace
                 : create ? DateOutcomeKind.Create
@@ -79,6 +81,8 @@ public static class SyncReport
             DateOutcomeKind.Replace => dryRun ? "vil erstatte (ny vakt)" : "erstattet",
             DateOutcomeKind.Unchanged => "uendret",
             DateOutcomeKind.NoShift => "ingen vakt",
+            _ when outcome.Warning == SyncActionKind.SkipManualEvent => outcome.GuardName is null
+                ? "manuelt arrangement finnes; ingen vakt" : "manuelt arrangement finnes; vakt hoppet over",
             _ => outcome.Warning == SyncActionKind.SkipPhoneNotFound
                 ? "telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over"
                 : "ingen av de foresatte har Spond-profil; vakt hoppet over"
