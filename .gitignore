@@ -22,6 +22,9 @@
 /src/**/[Rr]elease/
 /tests/**/[Rr]elease/
 
+# Local VS Code tasks (machine-specific)
+/.vscode/tasks.json
+
 # Visual Studio user state
 /.vs/
 /src/**/.vs/
