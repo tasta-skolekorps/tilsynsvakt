@@ -232,6 +232,7 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
   font-weight: 750;
 }
 .admin-duty-list { display: grid; gap: 12px; }
+.admin-duty-list > .admin-past-toggle, .admin-duty-list > .empty-state { grid-column: 1 / -1; justify-self: start; }
 .admin-duty-card p { margin: 6px 0 0; }
 .admin-duty-card { display: grid; gap: 12px; }
 .admin-meta {

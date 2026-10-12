@@ -7,14 +7,31 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 
 const baseUrl = process.env.ADMIN_TEST_URL || "http://127.0.0.1:8080";
 const guard = { id: 1, name: "Testvakt med et langt visningsnavn", phone: "", active: true };
+// Same shape as data/guards.json; it controls which names are listed and their order on both sites.
+const staticGuards = [
+  { id: "g1", name: "Testvakt med et langt visningsnavn", phone: "" },
+  { id: "g2", name: "Øvrebø", phone: "" },
+  { id: "g3", name: "Ådland", phone: "" },
+  { id: "g4", name: "Uten konto", phone: "" },
+];
+const adminGuards = [
+  { id: 3, name: "Ådland", phone: "", active: true },
+  { id: 1, name: "Testvakt  med et langt visningsnavn", phone: "", active: true },
+  { id: 2, name: "Øvrebø", phone: "", active: false },
+  { id: 9, name: "Bare i backend", phone: "", active: true },
+];
 const dutyList = {
   season: "autumn", year: 2026, from: "2026-09-01", to: "2026-11-28",
   duties: [{ date: "2026-10-06", dayOfWeek: "tuesday", status: "taken", guard,
     scheduledStart: "16:45", endTime: "22:00", hasRecordedCheckOut: false, durationHours: 5.5 },
   { date: "2026-10-05", dayOfWeek: "monday", status: "open", guard: null,
-    scheduledStart: "16:45", endTime: "22:00", hasRecordedCheckOut: false, durationHours: 5.5 }],
+    scheduledStart: "16:45", endTime: "22:00", hasRecordedCheckOut: false, durationHours: 5.5 },
+  { date: "2026-10-08", dayOfWeek: "thursday", status: "open", guard: null,
+    scheduledStart: "16:45", endTime: "21:00", hasRecordedCheckOut: false, durationHours: 4.25 }],
   totals: [{ guard, dutyCount: 1, totalHours: 5.5, dutiesWithoutCheckOut: 1 }],
 };
+// Wednesday 07.10.2026 in Oslo: the 06.10 duty is in the past, 08.10 is upcoming.
+const fixedNow = new Date("2026-10-07T12:00:00+02:00");
 
 async function run() {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
@@ -28,11 +45,13 @@ async function run() {
       const requests = [];
       page.on("pageerror", error => errors.push(error.message));
       page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+      await page.clock.setFixedTime(fixedNow);
+      await page.route("**/data/guards.json", route => route.fulfill({ json: staticGuards }));
       await page.route("**/api/admin/**", async route => {
         const url = new URL(route.request().url());
         requests.push({ pathname: url.pathname, search: url.search, method: route.request().method() });
         if (url.pathname.endsWith("/guards")) {
-          await route.fulfill({ json: [guard] });
+          await route.fulfill({ json: adminGuards });
         } else if (responder) {
           await responder(route, url);
         } else {
@@ -57,6 +76,26 @@ async function run() {
       await page.getByRole("tab", { name: "Vakter", exact: true }).click();
       assert.equal(new URL(page.url()).hash, "#vakter");
       assert.equal(await page.locator("#summering").isVisible(), false);
+      assert.equal(await page.locator(".admin-duty-form").count(), 1);
+      assert.equal(await page.locator(".admin-duty-form").getAttribute("data-date"), "2026-10-08");
+      const toggle = page.locator("#toggle-past");
+      assert.equal(await toggle.textContent(), "Vis tidligere vakter (1)");
+      assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+      const options = await page.locator("#guard-2026-10-08 option").evaluateAll(items =>
+        items.map(item => ({ text: item.textContent.trim(), value: item.value, disabled: item.disabled })));
+      assert.deepEqual(options, [
+        { text: "Ledig", value: "", disabled: false },
+        { text: "Testvakt med et langt visningsnavn", value: "1", disabled: false },
+        { text: "Øvrebø", value: "", disabled: true },
+        { text: "Ådland", value: "3", disabled: false },
+        { text: "Uten konto", value: "", disabled: true },
+      ]);
+      await toggle.click();
+      assert.equal(await page.locator(".admin-duty-form").count(), 2);
+      assert.equal(await page.locator("#toggle-past").textContent(), "Skjul tidligere vakter");
+      assert.equal(await page.locator("#toggle-past").getAttribute("aria-expanded"), "true");
+      assert.equal(await page.locator("#guard-2026-10-06").inputValue(), "1");
+      await page.locator("#toggle-past").click();
       assert.equal(await page.locator(".admin-duty-form").count(), 1);
       assert.equal(requests.length, beforeTabSwitch);
       await page.getByRole("tab", { name: "Vakter", exact: true }).press("ArrowRight");
@@ -133,6 +172,21 @@ async function run() {
     await empty.context.close();
     console.log("PASS: empty season states");
 
+    const backendOnly = adminGuards.find(candidate => candidate.id === 9);
+    const outside = await openPage({ hash: "#vakter", responder: route => route.fulfill({ json: { ...dutyList,
+      duties: [{ ...dutyList.duties[2], status: "taken", guard: backendOnly }] } }) });
+    await outside.page.locator(".admin-duty-form").waitFor();
+    assert.equal(await outside.page.locator("#toggle-past").count(), 0);
+    assert.equal(await outside.page.locator("#guard-2026-10-08").inputValue(), "9");
+    assert.equal(await outside.page.locator("#guard-2026-10-08 option").count(), 6);
+    await outside.context.close();
+
+    const onlyPast = await openPage({ hash: "#vakter", responder: route => route.fulfill({ json: { ...dutyList, duties: dutyList.duties.slice(0, 2) } }) });
+    await onlyPast.page.locator("#toggle-past").waitFor();
+    assert.match(await onlyPast.page.locator("#duties").textContent(), /Ingen kommende vakter/);
+    await onlyPast.context.close();
+    console.log("PASS: assigned guard outside shared list is kept; season with only past duties");
+
     const pendingRoutes = [];
     const stale = await openPage({ responder: route => new Promise(resolve => pendingRoutes.push({ route, resolve })) });
     while (pendingRoutes.length < 1) await stale.page.waitForTimeout(10);
@@ -164,7 +218,7 @@ async function run() {
       setTimeout: callback => setTimeout(callback, 25), clearTimeout,
       fetch: async () => ({ status: 200, ok: true, json: () => new Promise(() => {}) }),
     });
-    vm.runInContext(source.replace("if (hasCredentials()) {", "if (false) {"), context);
+    vm.runInContext(source.replace(/^import .*$/m, "").replace("if (hasCredentials()) {", "if (false) {"), context);
     await assert.rejects(vm.runInContext('apiFetch("/api/admin/duties")', context), error => error.name === "TimeoutError");
     console.log("PASS: stalled response body also times out");
     console.log(`Screenshots: ${screenshots}`);
