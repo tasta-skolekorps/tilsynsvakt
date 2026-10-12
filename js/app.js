@@ -1,3 +1,5 @@
+import { buildGuardEntries, fetchGuardNames, normalizeGuardName } from "./guards.js";
+
 const osloZone = "Europe/Oslo";
 const guardStorageKey = "tilsynsvakt.guard";
 const checklistStorageKey = "tilsynsvakt.checklist";
@@ -179,16 +181,9 @@ async function loadStaticData() {
 
 async function loadGuards() {
   try {
-    const [staticGuards, apiGuards] = await Promise.all([
-      fetch("./data/guards.json", { cache: "no-cache" }).then(response => {
-        if (!response.ok) throw new Error("Kunne ikke laste navnelisten.");
-        return response.json();
-      }),
-      apiRequest("/api/guards")
-    ]);
-    const normalize = name => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("nb");
-    const apiByName = new Map(apiGuards.map(guard => [normalize(guard.name), guard]));
-    const entries = staticGuards.map(guard => ({ name: guard.name, api: apiByName.get(normalize(guard.name)) }));
+    const [staticGuards, apiGuards] = await Promise.all([fetchGuardNames(), apiRequest("/api/guards")]);
+    const normalize = normalizeGuardName;
+    const entries = buildGuardEntries(staticGuards, apiGuards);
     state.guardList = entries.filter(entry => entry.api).map(entry => entry.api);
     let saved;
     try {

@@ -1,3 +1,5 @@
+import { buildGuardEntries, fetchGuardNames } from "./guards.js";
+
 const config = window.TILSYNSVAKT_CONFIG ?? {};
 const apiBaseUrl = (config.apiBaseUrl ?? "").replace(/\/$/, "");
 const requestTimeoutMs = 15000;
@@ -7,8 +9,9 @@ const storageKeys = {
 };
 
 const state = {
-  guards: [],
+  guardEntries: [],
   duties: [],
+  showPast: false,
   loadVersion: 0,
 };
 
@@ -134,13 +137,14 @@ async function loadAdminData(version) {
   renderNotice("Laster …");
   totalsElement.innerHTML = '<p class="loading">Laster summering …</p>';
   dutiesElement.innerHTML = '<p class="loading">Laster vakter …</p>';
-  const [guards, dutyList] = await Promise.all([
+  const [staticGuards, guards, dutyList] = await Promise.all([
+    fetchGuardNames(),
     apiFetch("/api/admin/guards"),
     apiFetch(`/api/admin/duties?season=${encodeURIComponent(selectedSeason())}&year=${encodeURIComponent(yearInput.value)}`),
   ]);
   if (version !== state.loadVersion) return;
 
-  state.guards = guards;
+  state.guardEntries = buildGuardEntries(staticGuards, guards);
   state.duties = dutyList.duties;
   setLoggedIn(true);
   renderTotals(dutyList.totals);
@@ -233,13 +237,24 @@ function renderDuties(allDuties) {
     return;
   }
 
-  dutiesElement.innerHTML = duties.map(duty => {
+  const today = osloTodayIso();
+  const pastCount = duties.filter(duty => duty.date < today).length;
+  const visible = state.showPast ? duties : duties.filter(duty => duty.date >= today);
+  const toggle = pastCount
+    ? `<button id="toggle-past" class="button button-secondary admin-past-toggle" type="button" aria-expanded="${state.showPast}">${state.showPast ? "Skjul tidligere vakter" : `Vis tidligere vakter (${pastCount})`}</button>`
+    : "";
+  const empty = visible.length ? "" : '<p class="empty-state">Ingen kommende vakter i valgt sesong.</p>';
+
+  dutiesElement.innerHTML = toggle + empty + visible.map(duty => {
     const selectId = `guard-${duty.date}`;
     const timeId = `checkout-${duty.date}`;
+    const assignedListed = state.guardEntries.some(entry => entry.api && entry.api.id === duty.guard?.id);
     const options = [`<option value="">Ledig</option>`]
-      .concat(state.guards.filter(guard => guard.active).map(guard => `
-        <option value="${guard.id}"${duty.guard?.id === guard.id ? " selected" : ""}>${escapeHtml(guard.name)}</option>
+      .concat(state.guardEntries.map(entry => `
+        <option value="${entry.api?.id ?? ""}"${entry.api ? "" : " disabled"}${entry.api && duty.guard?.id === entry.api.id ? " selected" : ""}>${escapeHtml(entry.name)}</option>
       `))
+      // Keep a guard assigned outside the shared list selectable so saving does not clear the duty.
+      .concat(duty.guard && !assignedListed ? [`<option value="${duty.guard.id}" selected>${escapeHtml(duty.guard.name)}</option>`] : [])
       .join("");
 
     return `
@@ -269,6 +284,12 @@ function renderDuties(allDuties) {
       </article>
     `;
   }).join("");
+
+  dutiesElement.querySelector("#toggle-past")?.addEventListener("click", () => {
+    state.showPast = !state.showPast;
+    renderDuties(state.duties);
+    dutiesElement.querySelector("#toggle-past")?.focus();
+  });
 
   dutiesElement.querySelectorAll(".admin-duty-form").forEach(form => {
     form.addEventListener("submit", async event => {
@@ -335,6 +356,10 @@ async function readProblem(response) {
   } catch {
     return null;
   }
+}
+
+function osloTodayIso() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 function formatDate(isoDate) {
