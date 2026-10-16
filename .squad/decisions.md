@@ -38,6 +38,8 @@
 
 Superseded by `.squad/decisions/inbox/copilot-directive-2026-10-03-persistence.md`: backend persistence is SQLite on a mounted volume, accessed via EF Core.
 
+**Superseded (2026-10-16):** The SQLite/EF Core statement above is no longer current. Persistence is Azure Table Storage via `Azure.Data.Tables` (see 2026-10-03: Switch persistence from SQLite to Azure Table Storage).
+
 ### 2026-10-03: User directive (SQLite persistence)
 **Status:** Superseded by 2026-10-03: Switch persistence from SQLite to Azure Table Storage (2026-10-03).
 **By:** repo owner (via Copilot)
@@ -743,3 +745,8 @@ claimed. Notification/response preservation and server acceptance remain unteste
 - Fixed concurrency group `spond-sync`, no cancellation of in-progress runs, ten-minute job timeout, and only `contents: read`. Failures propagate normally; no issue or custom notification automation.
 **Why:** First runs must be non-mutating and restricted to one pilot date, with no overlapping sync jobs, credential disclosure, or seasonal schedule drift.
 **Validation:** A duplicate-key-rejecting PyYAML parser and structural contract assertions passed, as did Bash syntax checks, 44 winter/summer/DST/hour-boundary cases, 20 exact dry-run/injection/manual-bypass cases, and four synthetic presence-validation cases. Git Bash lacks IANA timezone data, so date-based behavior tests used the equivalent POSIX rule `CET-1CEST,M3.5.0/2,M10.5.0/3`; the Ubuntu `Europe/Oslo` lookup is unverified locally. Actionlint is unavailable. No live Spond/backend requests, app builds, or app-file changes were made. Owner must configure secrets/variables and default GitHub failed-run email notifications. GitHub schedules can be delayed; exact fifteen-minute delivery is not guaranteed.
+
+### 2026-10-16: Table Storage is single source for guards
+**By:** repo owner (approved) via Lead
+**What:** Guards come only from the backend API (Azure Table Storage), in the alphabetical order returned by the API. `data/guards.json`, `data/roster-import.json`, `scripts/import-roster.ps1` and `js/guards.js` are removed; the roster import was a one-time seed. The frontend caches the `{id, name}` list in localStorage key `tilsynsvakt.guards` as a read-only fallback only. `data/usage-plan.json` and `data/contacts.json` stay as static repo JSON (offline use, per copilot-instructions).
+**Why:** `guards.json` duplicated Table guard data and could drift from the roster master.

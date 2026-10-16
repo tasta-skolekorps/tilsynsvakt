@@ -18,3 +18,5 @@
 - **2026-10-09:** `loadShifts()` caps `to` at 31.12 of the current Oslo year so the public site only shows the current year's shifts; every roster view reads `state.shifts`, so the single clamp covers all of them.
 
 📌 Team update (2026-10-03T22:48:50.1676592+02:00): Azure Table Storage is the selected roster persistence; SQLite has been removed from the implementation. The API contract remains under `/api`, Scalar is available at `/scalar`, and CORS uses the configured GitHub Pages frontend origin.
+
+- Team update (2026-10-16; Scribe): Table Storage is the single source for guards. guards.json, roster seed files and js/guards.js removed; frontend pickers load from /api/guards and /api/admin/guards (read-only localStorage fallback tilsynsvakt.guards); usage-plan.json and contacts.json remain static. Tests: admin UI 16/16, dotnet 213 pass / 2 skipped.
