@@ -1,7 +1,6 @@
-import { buildGuardEntries, fetchGuardNames, normalizeGuardName } from "./guards.js";
-
 const osloZone = "Europe/Oslo";
 const guardStorageKey = "tilsynsvakt.guard";
+const guardListCacheKey = "tilsynsvakt.guards";
 const checklistStorageKey = "tilsynsvakt.checklist";
 const weekdayNames = ["søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag"];
 const checklist = [
@@ -179,39 +178,46 @@ async function loadStaticData() {
   if (!state.staticAvailable) showNotice("Kunne ikke laste den lokale informasjonen. Prøv å laste siden på nytt.", "error");
 }
 
+function readStoredJson(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null");
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function renderGuardOptions(guards, { fromCache = false } = {}) {
+  state.guardList = guards;
+  const saved = readStoredJson(guardStorageKey);
+  elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
+  for (const guard of guards) elements.guardSelect.add(new Option(guard.name, String(guard.id)));
+  const match = guards.find(guard => guard.id === Number(saved?.id));
+  if (match) {
+    state.selectedGuardId = match.id;
+    elements.guardSelect.value = String(match.id);
+    localStorage.setItem(guardStorageKey, JSON.stringify({ id: match.id, name: match.name }));
+  } else if (saved && !fromCache) {
+    localStorage.removeItem(guardStorageKey);
+  }
+}
+
 async function loadGuards() {
   try {
-    const [staticGuards, apiGuards] = await Promise.all([fetchGuardNames(), apiRequest("/api/guards")]);
-    const normalize = normalizeGuardName;
-    const entries = buildGuardEntries(staticGuards, apiGuards);
-    state.guardList = entries.filter(entry => entry.api).map(entry => entry.api);
-    let saved;
-    try {
-      saved = JSON.parse(localStorage.getItem(guardStorageKey) || "null");
-    } catch {
-      localStorage.removeItem(guardStorageKey);
-    }
-    const savedId = Number(saved?.id);
-    elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
-    for (const entry of entries) {
-      const option = new Option(entry.name, String(entry.api?.id ?? ""));
-      option.disabled = !entry.api;
-      elements.guardSelect.add(option);
-    }
-    const match = state.guardList.find(guard => guard.id === savedId)
-      ?? (saved?.name ? state.guardList.find(guard => normalize(guard.name) === normalize(String(saved.name))) : null);
-    if (match) {
-      state.selectedGuardId = match.id;
-      elements.guardSelect.value = String(match.id);
-      localStorage.setItem(guardStorageKey, JSON.stringify({ id: match.id, name: match.name }));
-    } else if (saved) {
-      localStorage.removeItem(guardStorageKey);
-    }
+    const guards = await apiRequest("/api/guards");
+    renderGuardOptions(guards);
+    localStorage.setItem(guardListCacheKey, JSON.stringify(guards.map(({ id, name }) => ({ id, name }))));
     state.apiAvailable = true;
-    elements.guardStatus.textContent = `${state.guardList.length} av ${entries.length} tilsynsvakter kan melde seg på.`;
+    elements.guardStatus.textContent = guards.length ? "" : "Ingen tilsynsvakter er registrert ennå.";
     renderHandover();
   } catch (error) {
-    elements.guardStatus.textContent = "Kunne ikke laste navn fra vaktlisten.";
+    const cached = readStoredJson(guardListCacheKey);
+    if (Array.isArray(cached) && cached.length) {
+      renderGuardOptions(cached, { fromCache: true });
+      elements.guardStatus.textContent = "Viser sist lagrede navneliste. Vaktlisten er ikke tilgjengelig akkurat nå.";
+    } else {
+      elements.guardStatus.textContent = "Kunne ikke laste navn fra vaktlisten.";
+    }
     elements.guardSelect.disabled = true;
     showNotice(error.message, "error");
   }

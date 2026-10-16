@@ -1,5 +1,3 @@
-import { buildGuardEntries, fetchGuardNames } from "./guards.js";
-
 const config = window.TILSYNSVAKT_CONFIG ?? {};
 const apiBaseUrl = (config.apiBaseUrl ?? "").replace(/\/$/, "");
 const requestTimeoutMs = 15000;
@@ -9,7 +7,7 @@ const storageKeys = {
 };
 
 const state = {
-  guardEntries: [],
+  guards: [],
   duties: [],
   showPast: false,
   loadVersion: 0,
@@ -137,14 +135,13 @@ async function loadAdminData(version) {
   renderNotice("Laster …");
   totalsElement.innerHTML = '<p class="loading">Laster summering …</p>';
   dutiesElement.innerHTML = '<p class="loading">Laster vakter …</p>';
-  const [staticGuards, guards, dutyList] = await Promise.all([
-    fetchGuardNames(),
+  const [guards, dutyList] = await Promise.all([
     apiFetch("/api/admin/guards"),
     apiFetch(`/api/admin/duties?season=${encodeURIComponent(selectedSeason())}&year=${encodeURIComponent(yearInput.value)}`),
   ]);
   if (version !== state.loadVersion) return;
 
-  state.guardEntries = buildGuardEntries(staticGuards, guards);
+  state.guards = guards.filter(guard => guard.active !== false);
   state.duties = dutyList.duties;
   setLoggedIn(true);
   renderTotals(dutyList.totals);
@@ -248,12 +245,12 @@ function renderDuties(allDuties) {
   dutiesElement.innerHTML = toggle + empty + visible.map(duty => {
     const selectId = `guard-${duty.date}`;
     const timeId = `checkout-${duty.date}`;
-    const assignedListed = state.guardEntries.some(entry => entry.api && entry.api.id === duty.guard?.id);
+    const assignedListed = state.guards.some(guard => guard.id === duty.guard?.id);
     const options = [`<option value="">Ledig</option>`]
-      .concat(state.guardEntries.map(entry => `
-        <option value="${entry.api?.id ?? ""}"${entry.api ? "" : " disabled"}${entry.api && duty.guard?.id === entry.api.id ? " selected" : ""}>${escapeHtml(entry.name)}</option>
+      .concat(state.guards.map(guard => `
+        <option value="${guard.id}"${duty.guard?.id === guard.id ? " selected" : ""}>${escapeHtml(guard.name)}</option>
       `))
-      // Keep a guard assigned outside the shared list selectable so saving does not clear the duty.
+      // Keep an assigned inactive guard selectable so saving does not clear the duty.
       .concat(duty.guard && !assignedListed ? [`<option value="${duty.guard.id}" selected>${escapeHtml(duty.guard.name)}</option>`] : [])
       .join("");
 

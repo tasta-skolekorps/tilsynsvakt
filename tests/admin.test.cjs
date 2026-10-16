@@ -7,18 +7,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 
 const baseUrl = process.env.ADMIN_TEST_URL || "http://127.0.0.1:8080";
 const guard = { id: 1, name: "Testvakt med et langt visningsnavn", phone: "", active: true };
-// Same shape as data/guards.json; it controls which names are listed and their order on both sites.
-const staticGuards = [
-  { id: "g1", name: "Testvakt med et langt visningsnavn", phone: "" },
-  { id: "g2", name: "Øvrebø", phone: "" },
-  { id: "g3", name: "Ådland", phone: "" },
-  { id: "g4", name: "Uten konto", phone: "" },
-];
+// Alphabetical (nb) as returned by the API; the inactive guard must not be offered.
 const adminGuards = [
-  { id: 3, name: "Ådland", phone: "", active: true },
-  { id: 1, name: "Testvakt  med et langt visningsnavn", phone: "", active: true },
-  { id: 2, name: "Øvrebø", phone: "", active: false },
   { id: 9, name: "Bare i backend", phone: "", active: true },
+  guard,
+  { id: 2, name: "Øvrebø", phone: "", active: false },
+  { id: 3, name: "Ådland", phone: "", active: true },
 ];
 const dutyList = {
   season: "autumn", year: 2026, from: "2026-09-01", to: "2026-11-28",
@@ -46,7 +40,6 @@ async function run() {
       page.on("pageerror", error => errors.push(error.message));
       page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
       await page.clock.setFixedTime(fixedNow);
-      await page.route("**/data/guards.json", route => route.fulfill({ json: staticGuards }));
       await page.route("**/api/admin/**", async route => {
         const url = new URL(route.request().url());
         requests.push({ pathname: url.pathname, search: url.search, method: route.request().method() });
@@ -85,10 +78,9 @@ async function run() {
         items.map(item => ({ text: item.textContent.trim(), value: item.value, disabled: item.disabled })));
       assert.deepEqual(options, [
         { text: "Ledig", value: "", disabled: false },
+        { text: "Bare i backend", value: "9", disabled: false },
         { text: "Testvakt med et langt visningsnavn", value: "1", disabled: false },
-        { text: "Øvrebø", value: "", disabled: true },
         { text: "Ådland", value: "3", disabled: false },
-        { text: "Uten konto", value: "", disabled: true },
       ]);
       await toggle.click();
       assert.equal(await page.locator(".admin-duty-form").count(), 2);
@@ -136,7 +128,7 @@ async function run() {
       assert.deepEqual(errors, []);
       assert.deepEqual(consoleErrors, []);
       await context.close();
-      console.log(`PASS: tabs, keyboard, hashes, reload, shared picker/session, save and layout at ${viewport.width}px`);
+      console.log(`PASS: tabs, keyboard, hashes, reload, guard picker/session, save and layout at ${viewport.width}px`);
     }
 
     for (const hash of ["#summering", "#vakter"]) {
@@ -172,20 +164,20 @@ async function run() {
     await empty.context.close();
     console.log("PASS: empty season states");
 
-    const backendOnly = adminGuards.find(candidate => candidate.id === 9);
+    const inactiveGuard = adminGuards.find(candidate => candidate.active === false);
     const outside = await openPage({ hash: "#vakter", responder: route => route.fulfill({ json: { ...dutyList,
-      duties: [{ ...dutyList.duties[2], status: "taken", guard: backendOnly }] } }) });
+      duties: [{ ...dutyList.duties[2], status: "taken", guard: inactiveGuard }] } }) });
     await outside.page.locator(".admin-duty-form").waitFor();
     assert.equal(await outside.page.locator("#toggle-past").count(), 0);
-    assert.equal(await outside.page.locator("#guard-2026-10-08").inputValue(), "9");
-    assert.equal(await outside.page.locator("#guard-2026-10-08 option").count(), 6);
+    assert.equal(await outside.page.locator("#guard-2026-10-08").inputValue(), "2");
+    assert.equal(await outside.page.locator("#guard-2026-10-08 option").count(), 5);
     await outside.context.close();
 
     const onlyPast = await openPage({ hash: "#vakter", responder: route => route.fulfill({ json: { ...dutyList, duties: dutyList.duties.slice(0, 2) } }) });
     await onlyPast.page.locator("#toggle-past").waitFor();
     assert.match(await onlyPast.page.locator("#duties").textContent(), /Ingen kommende vakter/);
     await onlyPast.context.close();
-    console.log("PASS: assigned guard outside shared list is kept; season with only past duties");
+    console.log("PASS: assigned inactive guard is kept; season with only past duties");
 
     const pendingRoutes = [];
     const stale = await openPage({ responder: route => new Promise(resolve => pendingRoutes.push({ route, resolve })) });

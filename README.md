@@ -31,12 +31,11 @@ flowchart LR
 | `admin.html`, `js/admin.js` | Admin page: duty summary and guard/duty management (uses the admin API) |
 | `config.js` | Runtime config: `window.TILSYNSVAKT_CONFIG = { apiBaseUrl: "..." }` |
 | `sw.js` | Service worker (offline cache) |
-| `data/` | Static JSON: `usage-plan.json`, `contacts.json`, `guards.json`, `roster-import.json` |
+| `data/` | Static JSON: `usage-plan.json`, `contacts.json` (guards live only in Table Storage via the API) |
 | `src/Tilsynsvakt.Api/` | Minimal API, Table Storage stores, validation, ProblemDetails errors |
 | `src/Tilsynsvakt.AppHost/` | Aspire AppHost (API + Azurite locally, Azure Container Apps on publish) |
 | `src/Tilsynsvakt.ServiceDefaults/` | Aspire service defaults (health checks, telemetry) |
 | `src/Tilsynsvakt.SpondSync/` | Console tool for the one-way Spond sync |
-| `scripts/import-roster.ps1` | Imports `data/guards.json` and `data/roster-import.json` through the admin API |
 | `tests/Tilsynsvakt.Api.Tests/` | API tests (in-memory stores) and opt-in Azurite contract tests |
 | `tests/Tilsynsvakt.SpondSync.Tests/` | Spond sync planner/contract tests |
 | `tests/admin.test.cjs` | Playwright UI test for `admin.html` |
@@ -113,15 +112,9 @@ Then open `http://127.0.0.1:8080/` (guard site) or `http://127.0.0.1:8080/admin.
 
 `config.js` sets `window.TILSYNSVAKT_CONFIG.apiBaseUrl`, which both `js/app.js` and `js/admin.js` use for every API call. The committed value points at the deployed API. To use a local API, change `apiBaseUrl` locally (don't commit it) and make sure the API's `Frontend:Origin` matches the frontend origin, otherwise CORS blocks the requests.
 
-### Import guards and roster
+### Manage guards
 
-```powershell
-$env:TILSYNSVAKT_API_URL = "https://<backend>"
-$env:TILSYNSVAKT_ADMIN_KEY = "<admin key>"
-./scripts/import-roster.ps1 -WhatIf
-```
-
-The script reads the admin key from the environment only. Past shifts are skipped.
+Guards are stored only in Table Storage. Add, edit or deactivate them through the admin API (`/api/admin/guards`).
 
 ## Tests
 
