@@ -477,3 +477,14 @@ select, input[type="date"], textarea { border: var(--outline); border-radius: 0;
 .year-stepper input { width: 96px; min-height: 52px; box-sizing: border-box; text-align: center; font-size: 17px; border: var(--outline); border-radius: 0; background: var(--surface); color: var(--ink); -moz-appearance: textfield; }
 .year-stepper input::-webkit-outer-spin-button, .year-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .year-stepper .button { min-width: 52px; min-height: 52px; font-size: 22px; }
+
+/* Shared-password login */
+.login-panel { padding: 18px; margin: 0 0 20px; background: var(--surface); border: var(--outline); box-shadow: var(--shadow); }
+.login-panel h2 { margin: 0 0 8px; }
+.login-panel p { line-height: 1.5; }
+.login-panel form { display: grid; gap: 8px; margin: 12px 0; }
+.login-panel label { font-size: 13px; font-weight: 750; }
+.login-panel input[type="password"] { width: 100%; min-height: 44px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: var(--outline); border-radius: 0; }
+.login-panel .button { width: 100%; }
+.login-error { margin: 0; padding: 10px 12px; color: var(--navy-deep); background: var(--red-soft); border-left: 6px solid var(--red); font-weight: 650; }
+.link-button { min-height: 44px; padding: 0; color: inherit; background: none; border: 0; font-size: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }

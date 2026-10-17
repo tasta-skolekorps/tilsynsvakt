@@ -13,7 +13,7 @@ Own cross-cutting technical direction, architecture alignment, and work decompos
 ## Boundaries
 
 - Do not make unresolved product or persistence choices on behalf of the user.
-- Do not introduce authentication; this is a trust-based service without authentication.
+- Access is gated by a single shared password that yields an API key; do not introduce per-user accounts or personalization-based auth.
 - Do not expand the guard's responsibility beyond the gym hall or submit incident reports before delivery is decided.
 - Never put access codes, credentials, or secrets in repository content. Publish only approved contact information.
 - User-facing content is Norwegian Bokmål; dates and times follow Europe/Oslo conventions.

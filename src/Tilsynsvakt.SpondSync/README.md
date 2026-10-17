@@ -62,6 +62,10 @@ or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option
 - `SPOND_USERNAME`, `SPOND_PASSWORD`: required even for dry-run. Configure only
   in GitHub Actions Secrets; never send credentials to an agent.
 - `API_BASE_URL`: required HTTP(S) origin, without credentials, path, query, or fragment.
+- `API_PASSWORD`: required shared access password for the backend API. The tool
+  posts it to `POST /api/auth/login` and sends the returned key as `X-Api-Key` on
+  roster requests. In GitHub Actions it comes from the repository secret
+  `ACCESS_PASSWORD`. Neither the password nor the key is ever logged.
 - `SPOND_GROUP_NAME`: defaults to `Tasta Skolekorps - Medlemmer`.
 - `SPOND_SUBGROUP_NAME`: defaults to `Tilsynsvakt`.
 - `SPOND_SYNC_DATES`: optional limit, comma-separated `yyyy-MM-dd`. Unset or empty

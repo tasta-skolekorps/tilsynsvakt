@@ -46,3 +46,9 @@
 - 2026-10-09T09:45:00+02:00: Live Spond list results are NOT sorted by start despite `order=asc` (58-event page unsorted); never page by cursor. `GetEventsAsync` treats a sub-max page as complete and splits a full page's start window in halves (whole seconds, stack, ID dedupe), failing closed at ≤1 h full windows, >64 requests or starts outside the window.
 
 - 2026-10-09T10:15:00+02:00: Manual Spond events (exact heading, target group, no marker, Oslo start date in window incl. already-started today) are returned as `EventListing.ManualDates`; `Plan` emits write-free `SkipManualEvent` for those dates before any owned-event logic (so an owned event there is neither updated nor deleted), and `ExecutePlanAsync` refuses writes sharing a date with that skip. Generic fixtures with the sync heading and no marker now count as manual — assert `.Owned` in list tests.
+## 2026-10-17 – Simple shared-password auth
+- `/api/*` is gated by `AccessKeyMiddleware` (after CORS, before rate limiter). Exemptions: `/api/auth/login`, `/api/admin/**`, OPTIONS. Errors are written directly with `ToResult().ExecuteAsync`, so CORS headers stay.
+- Key = `tv1.` + base64url(HMACSHA256(password, "tilsynsvakt-api-key-v1")). It is stateless, and rotating the password revokes all keys.
+- `Access:Password` is required in every environment (fail closed before `Build()`). The dev placeholder is in `appsettings.Development.json`.
+- SpondSync logs in with `API_PASSWORD` through `BackendClient.LoginAsync`, then sends `X-Api-Key` via DefaultRequestHeaders.
+- Don't add `.Accepts<T>("application/json")` to endpoints that read the body with `Req.BodyAsync`. Endpoint metadata turns away other content types with an empty 415 before the handler runs, so the `unsupported_media_type` problem body never reaches the client.

@@ -15,7 +15,7 @@ Own CI, deployment, hosting configuration, and runtime operations for Tilsynsvak
 - Do not choose the backend persistence store; that decision is unresolved and outside this role's ownership.
 - Never put Spond credentials, access codes, tokens, or other secrets in repository files or frontend code.
 - Keep Spond synchronization scheduled and one-way from the backend roster; do not add Spond calls to the browser or backend API.
-- Preserve the trust-based, no-authentication product model and restrict API CORS to the frontend origin.
+- Keep the shared access password (`ACCESS_PASSWORD`) only in GitHub Actions/ACA secrets, and restrict API CORS to the frontend origin.
 - The guard is responsible for the gym hall only. Do not create an incident-report delivery path until it is decided.
 
 ## Model

@@ -22,6 +22,7 @@ foreach (var (configKey, envName, parameterName) in new[]
     ("Admin:ApiKey", "Admin__ApiKey", "admin-api-key"),
     ("Admin:Username", "Admin__Username", "admin-username"),
     ("Admin:Password", "Admin__Password", "admin-password"),
+    ("Access:Password", "Access__Password", "access-password"),
 })
 {
     if (!string.IsNullOrWhiteSpace(builder.Configuration[configKey]))
@@ -32,6 +33,12 @@ foreach (var (configKey, envName, parameterName) in new[]
 
 if (builder.ExecutionContext.IsPublishMode)
 {
+    // The API refuses to start without the shared password, so fail before deploying it.
+    if (string.IsNullOrWhiteSpace(builder.Configuration["Access:Password"]))
+    {
+        throw new InvalidOperationException("Access:Password must be configured for publish (set Access__Password).");
+    }
+
     // Aspire grants the API's managed identity Table Data Contributor, which is enough to create the table.
     api.WithEnvironment("Storage__CreateTable", "true")
        .WithExternalHttpEndpoints()

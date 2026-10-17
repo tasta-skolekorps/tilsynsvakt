@@ -32,3 +32,9 @@
 - 2026-10-08T18:05:00+02:00 (PR #42, for Leif Bjarte Johansson): Bumped Node-20 actions to verified node24 majors across all workflows — checkout v4→v7, setup-dotnet v4→v6, github-script v7→v9 (SHA-pinned, matching sync-squad-labels.yml), azure/login v2→v3; YAML parse OK.
 - 2026-10-09T09:30:00+02:00 (PR #42, for Leif Bjarte Johansson): Removed the `2026-11-26` pilot fallback from spond-sync.yml; `SPOND_SYNC_DATES` is now an optional repo-variable limit, and unset/empty syncs the full current window. README updated; 206 tests passed, 2 skipped; YAML parse OK.
 - **2026-10-09T10:40:00+02:00 (issue #44):** Moved ADMIN_API_KEY/USERNAME/PASSWORD from `vars.*` to `secrets.*` scoped to the Deploy step with a fail-early presence check; AppHost now uses `AddParameterFromConfiguration(..., secret: true)` so Aspire publishes them as `@secure()` Bicep params and ACA `secretRef`s (previously plain-text env values in the ACA template). Verified by YAML parse, AppHost build and a dummy-value `aspire publish` (no values in output, secretRef present); actionlint absent, no Azure deploy run.
+
+## 2026-10-17 – Shared-password auth (infra)
+
+- `Access:Password` added to AppHost secret-parameter loop (ACA secret `access-password`); publish mode fails fast if it is unset.
+- Repo-level secret `ACCESS_PASSWORD` feeds deploy (`Access__Password`) and Spond sync (`API_PASSWORD`); both "Validate required" steps list it.
+- Learning: when a secret is needed by both an environment-scoped job (`production`) and a non-environment job, make it a repository-level secret.

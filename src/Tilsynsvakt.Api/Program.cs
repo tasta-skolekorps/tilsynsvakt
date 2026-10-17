@@ -51,9 +51,18 @@ builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
     }
 
     policy.WithMethods("GET", "POST", "PUT", "DELETE")
-        .WithHeaders("Content-Type", "Authorization");
+        .WithHeaders("Content-Type", "Authorization", AccessKey.HeaderName);
 }));
 
+var accessPassword = builder.Configuration["Access:Password"];
+if (string.IsNullOrWhiteSpace(accessPassword))
+{
+    throw new InvalidOperationException("Access:Password must be configured.");
+}
+
+builder.Services.AddSingleton(new AccessSettings(accessPassword));
+
+var loginLimit = Math.Max(1, builder.Configuration.GetValue("RateLimit:LoginPerMinute", 10));
 var mutationLimit = Math.Max(1, builder.Configuration.GetValue("RateLimit:MutationsPerMinute", 30));
 var adminLimit = Math.Max(1, builder.Configuration.GetValue("RateLimit:AdminPerMinute", 20));
 builder.Services.AddRateLimiter(options =>
@@ -79,15 +88,26 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
             AutoReplenishment = true,
         }));
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = loginLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true,
+        }));
 });
 
 var app = builder.Build();
 app.UseMiddleware<ProblemMiddleware>();
 app.UseCors();
+app.UseMiddleware<AccessKeyMiddleware>();
 app.UseRateLimiter();
 app.MapDefaultEndpoints();
 app.MapOpenApi();
 app.MapScalarApiReference();
+app.MapAuthEndpoints();
 app.MapGuardEndpoints();
 app.MapShiftEndpoints();
 app.MapSwapEndpoints();

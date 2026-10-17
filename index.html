@@ -38,6 +38,17 @@
 
   <main id="main">
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
+      <h2 id="login-title">Logg inn</h2>
+      <p>Vaktlisten er beskyttet med et felles passord. Passordet får du av styret i Tasta skolekorps.</p>
+      <form id="login-form" novalidate>
+        <label for="login-password">Passord</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" type="submit">Logg inn</button>
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+      </form>
+      <p>Glemt passordet? Kontakt Leif Bjarte Johansson, <a href="tel:+4792423946">924 23 946</a>.</p>
+    </section>
     <section id="view-plan" class="view" aria-labelledby="plan-title">
       <div class="page-heading">
         <div>
@@ -114,6 +125,6 @@
     </section>
   </main>
 
-  <footer class="site-footer"><p>Tasta skolekorps <span aria-hidden="true">·</span> Tilsynsvakt for gymsalen</p><a href="tel:+4792423946">Spørsmål? 924 23 946</a><a href="admin.html">Admin</a></footer>
+  <footer class="site-footer"><p>Tasta skolekorps <span aria-hidden="true">·</span> Tilsynsvakt for gymsalen</p><a href="tel:+4792423946">Spørsmål? 924 23 946</a><a href="admin.html">Admin</a><button type="button" id="logout" class="link-button" hidden>Logg ut</button></footer>
 </body>
 </html>
