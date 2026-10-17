@@ -2,6 +2,8 @@ const osloZone = "Europe/Oslo";
 const guardStorageKey = "tilsynsvakt.guard";
 const guardListCacheKey = "tilsynsvakt.guards";
 const checklistStorageKey = "tilsynsvakt.checklist";
+const apiKeyStorageKey = "tilsynsvakt.apiKey";
+const networkErrorMessage = "Får ikke kontakt med vaktlisten. Kontroller nettforbindelsen og prøv igjen.";
 const weekdayNames = ["søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag"];
 const checklist = [
   { group: "Før vakten", label: "Motta permen med nøkler og instruks fra forrige vakt." },
@@ -54,7 +56,13 @@ const elements = {
   progressTrack: document.querySelector(".progress-track"),
   progressFill: document.querySelector("#progress-fill"),
   incidentDate: document.querySelector("#incident-date"),
-  incidentPreview: document.querySelector("#incident-preview")
+  incidentPreview: document.querySelector("#incident-preview"),
+  loginPanel: document.querySelector("#login-panel"),
+  loginForm: document.querySelector("#login-form"),
+  loginPassword: document.querySelector("#login-password"),
+  loginError: document.querySelector("#login-error"),
+  loginButton: document.querySelector("#login-form button[type=submit]"),
+  logout: document.querySelector("#logout")
 };
 
 function node(tag, className, text) {
@@ -133,16 +141,121 @@ function shiftUrl(path) {
   return `${base}${path}`;
 }
 
+function getApiKey() {
+  try {
+    return localStorage.getItem(apiKeyStorageKey) || null;
+  } catch {
+    return null;
+  }
+}
+
+function loginRequiredError(message = "Du må logge inn for å se vaktlisten.") {
+  const error = new Error(message);
+  error.status = 401;
+  error.code = "access_key_required";
+  return error;
+}
+
+function isLoginRequired(error) {
+  return error?.status === 401 && error.code === "access_key_required";
+}
+
+function showLoginError(message) {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = false;
+}
+
+function clearLoginError() {
+  elements.loginError.hidden = true;
+  elements.loginError.textContent = "";
+}
+
+function clearApiData() {
+  state.guardList = [];
+  state.selectedGuardId = null;
+  state.shifts = [];
+  state.swaps = [];
+  state.swapTarget = null;
+  state.apiAvailable = false;
+  elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
+  elements.guardSelect.disabled = true;
+  elements.guardStatus.textContent = "Logg inn for å se navnelisten.";
+  for (const container of [elements.myShifts, elements.allShifts]) {
+    container.replaceChildren(node("p", "empty-state", "Logg inn for å se vaktlisten."));
+  }
+  elements.nextHandover.textContent = "Logg inn for å se neste vakt.";
+  elements.rosterHandover.textContent = "Logg inn for å se overleveringen.";
+  renderSignoff();
+}
+
+function requireLogin(message) {
+  try {
+    localStorage.removeItem(apiKeyStorageKey);
+    localStorage.removeItem(guardListCacheKey);
+  } catch {
+    // Storage may be unavailable; the panel is still shown.
+  }
+  clearApiData();
+  elements.loginPanel.hidden = false;
+  elements.logout.hidden = true;
+  if (message) showNotice(message, "error");
+  elements.loginPassword.focus();
+}
+
+function showLoggedIn() {
+  elements.loginPanel.hidden = true;
+  elements.logout.hidden = false;
+  elements.guardSelect.disabled = false;
+  clearLoginError();
+}
+
+async function loadApiData() {
+  await Promise.all([loadGuards(), loadShifts()]);
+}
+
+async function login(password) {
+  let response;
+  try {
+    response = await fetch(shiftUrl("/api/auth/login"), {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+  } catch {
+    throw new Error(networkErrorMessage);
+  }
+  if (response.ok) {
+    const result = await response.json().catch(() => ({}));
+    if (typeof result.apiKey !== "string" || !result.apiKey) throw new Error("Innloggingen mislyktes. Prøv igjen.");
+    return result.apiKey;
+  }
+  let problem = {};
+  try {
+    problem = await response.json();
+  } catch {
+    problem = {};
+  }
+  if (response.status === 401) throw new Error("Feil passord. Prøv igjen.");
+  if (response.status === 429) throw new Error("For mange forsøk. Vent litt og prøv igjen.");
+  throw new Error([problem.title, problem.detail].filter(Boolean).join(": ") || `Innloggingen mislyktes (${response.status}).`);
+}
+
 async function apiRequest(path, options = {}) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    requireLogin();
+    throw loginRequiredError();
+  }
   let response;
   try {
     response = await fetch(shiftUrl(path), {
       ...options,
       cache: "no-store",
-      headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers }
+      headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers, "X-Api-Key": apiKey }
     });
   } catch {
-    throw new Error("Får ikke kontakt med vaktlisten. Kontroller nettforbindelsen og prøv igjen.");
+    throw new Error(networkErrorMessage);
   }
   if (response.ok) return response.status === 204 ? null : response.json();
 
@@ -156,6 +269,10 @@ async function apiRequest(path, options = {}) {
   error.status = response.status;
   error.code = problem.code;
   error.currentShift = problem.currentShift;
+  if (isLoginRequired(error)) {
+    requireLogin("Du må logge inn på nytt.");
+    throw loginRequiredError("Du må logge inn på nytt.");
+  }
   throw error;
 }
 
@@ -211,6 +328,7 @@ async function loadGuards() {
     elements.guardStatus.textContent = guards.length ? "" : "Ingen tilsynsvakter er registrert ennå.";
     renderHandover();
   } catch (error) {
+    if (isLoginRequired(error)) return;
     const cached = readStoredJson(guardListCacheKey);
     if (Array.isArray(cached) && cached.length) {
       renderGuardOptions(cached, { fromCache: true });
@@ -241,6 +359,7 @@ async function loadShifts({ message } = {}) {
     renderSignoff();
     if (message) showNotice(message, "success");
   } catch (error) {
+    if (isLoginRequired(error)) return;
     for (const container of [elements.myShifts, elements.allShifts]) {
       container.replaceChildren(node("p", "empty-state", error.message));
     }
@@ -514,6 +633,7 @@ async function mutateShift(path, options, successMessage) {
     await apiRequest(path, options);
     await loadShifts({ message: successMessage });
   } catch (error) {
+    if (isLoginRequired(error)) return;
     if (error.status === 409) {
       const current = error.currentShift;
       const currentText = current
@@ -703,6 +823,55 @@ function setupForms() {
   });
 }
 
+function setupLogin() {
+  elements.loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    clearLoginError();
+    const password = elements.loginPassword.value;
+    if (!password.trim()) {
+      showLoginError("Skriv inn passordet.");
+      elements.loginPassword.focus();
+      return;
+    }
+    const buttonText = elements.loginButton.textContent;
+    elements.loginButton.disabled = true;
+    elements.loginButton.textContent = "Logger inn …";
+    try {
+      const apiKey = await login(password);
+      elements.loginPassword.value = "";
+      try {
+        localStorage.setItem(apiKeyStorageKey, apiKey);
+      } catch {
+        showLoginError("Nettleseren kunne ikke lagre innloggingen. Sjekk at lagring er tillatt.");
+        return;
+      }
+      showLoggedIn();
+      clearNotice();
+      await loadApiData();
+      renderPlan();
+    } catch (error) {
+      elements.loginPassword.value = "";
+      showLoginError(error.message);
+      elements.loginPassword.focus();
+    } finally {
+      elements.loginButton.disabled = false;
+      elements.loginButton.textContent = buttonText;
+    }
+  });
+
+  elements.logout.addEventListener("click", () => {
+    try {
+      localStorage.removeItem(apiKeyStorageKey);
+      localStorage.removeItem(guardListCacheKey);
+      localStorage.removeItem(guardStorageKey);
+    } catch {
+      // Ignore storage errors; requireLogin clears what it can.
+    }
+    requireLogin();
+    showNotice("Du er logget ut.", "info");
+  });
+}
+
 function setupOfflineSupport() {
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
@@ -713,12 +882,18 @@ async function start() {
   const today = todayIso();
   elements.incidentDate.value = today;
   setupForms();
+  setupLogin();
   renderChecklist();
   setView();
   window.addEventListener("hashchange", setView);
   setupOfflineSupport();
   await loadStaticData();
-  await Promise.all([loadGuards(), loadShifts()]);
+  if (!getApiKey()) {
+    requireLogin();
+    return;
+  }
+  showLoggedIn();
+  await loadApiData();
   renderPlan();
 }
 

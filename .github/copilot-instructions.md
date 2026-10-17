@@ -63,7 +63,7 @@ Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and We
 
 - **Frontend:** static website on **GitHub Pages**. Mobile first – used on a phone in the hallway by the gym hall.
 - **Backend:** .NET minimal API, orchestrated with **Aspire**, using Azure Table Storage via `Azure.Data.Tables` (ACA managed identity; local Azurite), and deployed to standard **Azure Container Apps**.
-- **Trust-based:** no authentication. The guard selects their name (selection, not login), and anyone can sign up for or change any shift.
+- **Shared password:** one shared password (`Access:Password`) unlocks an API key (`X-Api-Key`) stored in `localStorage`. No per-user accounts; the guard still *selects* their name, and anyone logged in can sign up for or change any shift.
 
 ## Source of truth
 
@@ -84,12 +84,12 @@ Musikkaula (not the guard's responsibility): skolekorps Mon 17:45–20:30 and We
 ## Backend
 
 - Persists which shifts each guard signs up for. Stores only date, name and phone per shift.
-- No authentication. Validate input and restrict CORS to the frontend origin.
+- All `/api/*` endpoints except `POST /api/auth/login` require `X-Api-Key` (derived from the shared password); admin endpoints keep their own admin credentials. Validate input and restrict CORS to the frontend origin.
 - Persistence store: Azure Table Storage via `Azure.Data.Tables`. In Azure Container Apps, use the system-assigned managed identity with a pre-created table; local development uses Aspire's Azurite Tables emulator.
 
 ## Spond sync
 
 - Spond has no official public API. **Never** call Spond from the browser or the backend API.
-- A scheduled GitHub Action reads the roster from the backend API and syncs it to Spond using Spond credentials from Secrets.
+- A scheduled GitHub Action reads the roster from the backend API and syncs it to Spond using Spond credentials from Secrets. It logs in to the backend API with the shared password from the `ACCESS_PASSWORD` secret.
 - Target: group **Tasta Skolekorps – Medlemmer → subgroup Tilsynsvakt**. Each shift is one event with the guard as attendee.
 - Sync is one-way (backend → Spond). Nothing is read back from Spond.

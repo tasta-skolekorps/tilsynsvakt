@@ -10,6 +10,7 @@ public sealed class SyncOptionsTests
             "SPOND_USERNAME" => "test-placeholder",
             "SPOND_PASSWORD" => "test-placeholder",
             "API_BASE_URL" => origin,
+            "API_PASSWORD" => "test-placeholder",
             "SPOND_SYNC_DATES" => dates,
             "DRY_RUN" => dryRun,
             _ => null
@@ -23,6 +24,10 @@ public sealed class SyncOptionsTests
         Assert.Equal("Tasta Skolekorps - Medlemmer", options.GroupName);
         Assert.Equal("Tilsynsvakt", options.SubgroupName);
     }
+
+    [Fact]
+    public void Options_ReadsApiPasswordFromEnvironment() =>
+        Assert.Equal("test-placeholder", Options().ApiPassword);
 
     [Theory]
     [InlineData(null)]
@@ -106,6 +111,7 @@ public sealed class SyncOptionsTests
     [InlineData("SPOND_USERNAME")]
     [InlineData("SPOND_PASSWORD")]
     [InlineData("API_BASE_URL")]
+    [InlineData("API_PASSWORD")]
     public void Options_MissingRequiredSettingNamesOnlyTheKey(string missing)
     {
         var error = Assert.Throws<SyncException>(() => SyncOptions.FromEnvironment(key =>

@@ -12,7 +12,7 @@ Own the .NET minimal API behavior and roster data contract for Tilsynsvakt.
 
 ## Boundaries
 
-- The service is trust-based and has no authentication; do not add login or authorization assumptions.
+- Access uses a shared password → stateless API key (`X-Api-Key`); do not add per-user accounts or authorization beyond that.
 - Persistence is undecided. Do not select or implement a persistence store without an approved decision.
 - Spond must only be reached by the scheduled GitHub Action, never by the browser or backend API.
 - Do not implement incident-report submission until delivery is decided; the current scope is a form only.

@@ -14,14 +14,14 @@ The repo contains:
 flowchart LR
     Browser["Static frontend<br/>(GitHub Pages)<br/>index.html, admin.html"] -- "HTTPS + CORS" --> Api["Tilsynsvakt.Api<br/>.NET minimal API<br/>(Azure Container Apps)"]
     Api -- "Managed identity" --> Tables[("Azure Table Storage")]
-    Action["GitHub Action<br/>spond-sync.yml (scheduled)"] -- "GET /api/shifts" --> Api
+    Action["GitHub Action<br/>spond-sync.yml (scheduled)"] -- "login + GET /api/shifts" --> Api
     Action -- "one-way" --> Spond["Spond<br/>(reminders only)"]
 ```
 
 - **Frontend:** plain HTML/CSS/JS, no build step. Static data (usage plan, contacts, guard names) lives in `data/*.json`. A service worker (`sw.js`) caches the app shell and static data.
 - **Backend:** .NET 10 minimal API orchestrated with Aspire 13.6. Persists guards and shifts in Azure Table Storage via `Azure.Data.Tables` (one table, default name `Tilsynsvakt`). Locally, Aspire runs the Azurite Tables emulator; in Azure Container Apps the API uses its managed identity.
 - **Spond sync:** Spond has no official public API and is never called from the browser or the API. A scheduled GitHub Action runs `src/Tilsynsvakt.SpondSync`, reads the roster from the API and syncs it one way to Spond. See [src/Tilsynsvakt.SpondSync/README.md](src/Tilsynsvakt.SpondSync/README.md).
-- **Trust-based:** no authentication for guards. A guard selects their name (selection, not login) and anyone can sign up for or change any shift. Only the admin endpoints are protected.
+- **Shared password:** one shared password (`Access:Password`) unlocks an API key that the frontend stores in `localStorage` (`tilsynsvakt.apiKey`) and sends as `X-Api-Key`. There are no per-user accounts: a guard still *selects* their name (selection, not login) and anyone logged in can sign up for or change any shift. Admin endpoints keep their own admin credentials. Changing the password invalidates all stored keys.
 
 ## Repo layout
 
@@ -39,14 +39,18 @@ flowchart LR
 | `tests/Tilsynsvakt.Api.Tests/` | API tests (in-memory stores) and opt-in Azurite contract tests |
 | `tests/Tilsynsvakt.SpondSync.Tests/` | Spond sync planner/contract tests |
 | `tests/admin.test.cjs` | Playwright UI test for `admin.html` |
+| `tests/app-auth.test.cjs` | Playwright UI test for the login flow in `index.html` |
 | `Tilsynsvakt.slnx`, `aspire.config.json` | Solution file and Aspire CLI AppHost pointer |
 
 ## API
 
 All routes are under `/api`. Errors are RFC 9457 ProblemDetails with Norwegian `title`/`detail` and a stable `code`.
 
+Every `/api/*` route except `POST /api/auth/login` and `/api/admin/*` requires the header `X-Api-Key`; a missing or wrong key returns 401 with `code: "access_key_required"`. The key is derived from the shared password (HMAC-SHA256), so it needs no storage and rotates with the password.
+
 | Method | Route | Purpose |
 |--------|-------|---------|
+| POST | `/api/auth/login` | Exchange `{ "password": "..." }` for `{ "apiKey": "..." }` (401 `invalid_password` on wrong password; rate limited) |
 | GET | `/api/guards` | Active guards |
 | GET | `/api/shifts?from=&to=` | Shifts in a date range (open/taken) |
 | GET | `/api/shifts/{date}` | One shift |
@@ -73,7 +77,8 @@ Admin endpoints are only mapped when `Admin:ApiKey` or both `Admin:Username` and
 | `Storage:CreateTable` | Create the table on startup (`true` in Development and on ACA publish) |
 | `Frontend:Origin` | The single allowed CORS origin (origin only, no path) |
 | `Calendar:Periods`, `Calendar:Closed` | Shift periods (01.09–28.11, 05.01–29.05) and closed date ranges |
-| `RateLimit:MutationsPerMinute`, `RateLimit:AdminPerMinute` | Per-IP rate limits (defaults 30 / 20) |
+| `Access:Password` | Shared password for `POST /api/auth/login` – required in every environment (the API refuses to start without it); secret, never in the repo |
+| `RateLimit:MutationsPerMinute`, `RateLimit:AdminPerMinute`, `RateLimit:LoginPerMinute` | Per-IP rate limits (defaults 30 / 20 / 10) |
 | `Admin:ApiKey`, `Admin:Username`, `Admin:Password` | Admin credentials – secrets, never in the repo |
 
 ## Getting started locally
@@ -100,7 +105,7 @@ dotnet run --project src/Tilsynsvakt.AppHost
 
 The AppHost starts a persistent Azurite container with a data volume, waits for it, then starts the API with `ASPNETCORE_ENVIRONMENT=Development`. Open the Aspire dashboard to find the API URL.
 
-`appsettings.Development.json` contains a development-only admin username/password placeholder. Use .NET User Secrets for anything else; never commit real credentials.
+`appsettings.Development.json` contains development-only placeholders for the admin username/password and the shared access password (`Access:Password` = `dev-only-change-me`, used to log in on the guard site locally). Use .NET User Secrets for anything else; never commit real credentials.
 
 ### Serve the frontend
 
@@ -127,6 +132,8 @@ dotnet test Tilsynsvakt.slnx
 
 Admin UI test (Playwright, mocked admin API): run the VS Code task **admin-ui-test-run**. It installs Playwright into `%TEMP%\tilsynsvakt-pw` if missing, uses the installed Microsoft Edge as Chromium, serves the repo on `127.0.0.1:8080` and runs `node tests/admin.test.cjs`. Override the URL with `ADMIN_TEST_URL` if needed.
 
+Login UI test (Playwright, mocked API): `node tests/app-auth.test.cjs` with the same Playwright setup and the repo served on `127.0.0.1:8080`. It covers the login panel, wrong password, storing `tilsynsvakt.apiKey`, the `X-Api-Key` header, re-login on `access_key_required` and logout.
+
 ## CI, deployment and secrets
 
 | Workflow | Trigger | What it does |
@@ -135,10 +142,12 @@ Admin UI test (Playwright, mocked admin API): run the VS Code task **admin-ui-te
 | `squad-release.yml` | Push to `main`, manual | Tests, then `aspire deploy` to Azure Container Apps using Azure OIDC login |
 | `spond-sync.yml` | Every 15 min (only acts 06:00–23:00 Europe/Oslo), manual | Runs `Tilsynsvakt.SpondSync` against the API; dry run unless explicitly disabled |
 
-Secrets are only stored as **GitHub Actions Secrets** and in the **Azure Container Apps secret store** (Aspire publishes the admin parameters as ACA secrets). Never put secrets in the frontend or the repo – the frontend is public.
+Secrets are only stored as **GitHub Actions Secrets** and in the **Azure Container Apps secret store** (Aspire publishes the admin parameters and `Access:Password` as ACA secrets). Never put secrets in the frontend or the repo – the frontend is public.
 
-- Deploy (`production` environment): secrets `ADMIN_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`; variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`, `AZURE_RESOURCE_GROUP`, `FRONTEND_ORIGIN`.
-- Spond sync: secrets `SPOND_USERNAME`, `SPOND_PASSWORD`; variables `API_BASE_URL`, `SPOND_SYNC_DRY_RUN`, `SPOND_SYNC_DATES`.
+`ACCESS_PASSWORD` (the shared guard password) must be a **repository-level** Actions secret so both the deploy job and the Spond sync job can read it. Use at least 12 characters (e.g. three random words). Set it before merging the auth change; rotating it logs everyone out.
+
+- Deploy (`production` environment): secrets `ADMIN_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ACCESS_PASSWORD`; variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`, `AZURE_RESOURCE_GROUP`, `FRONTEND_ORIGIN`.
+- Spond sync: secrets `SPOND_USERNAME`, `SPOND_PASSWORD`, `ACCESS_PASSWORD` (passed to the tool as `API_PASSWORD` to log in to the API); variables `API_BASE_URL`, `SPOND_SYNC_DRY_RUN`, `SPOND_SYNC_DATES`.
 
 ## Conventions
 

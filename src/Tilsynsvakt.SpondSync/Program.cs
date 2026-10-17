@@ -14,6 +14,8 @@ try
     using var backendHttp = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
     var from = dates.Min().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     var to = dates.Max().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var apiKey = await BackendClient.LoginAsync(backendHttp, options.ApiBaseUrl, options.ApiPassword, timeout.Token);
+    backendHttp.DefaultRequestHeaders.Add(BackendClient.ApiKeyHeader, apiKey);
     using var response = await backendHttp.GetAsync(new Uri(options.ApiBaseUrl,
         $"api/shifts?from={from}&to={to}"), timeout.Token);
     using var document = await SpondClient.ReadAsync(response, timeout.Token);

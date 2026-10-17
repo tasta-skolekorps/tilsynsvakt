@@ -95,6 +95,12 @@ public static class Errors
     public static ApiException Unauthorized() =>
         new(401, "unauthorized", "Ikke autorisert", "Manglende eller ugyldig nøkkel.");
 
+    public static ApiException InvalidPassword() =>
+        new(401, "invalid_password", "Feil passord", "Passordet er feil. Prøv igjen.");
+
+    public static ApiException AccessKeyRequired() =>
+        new(401, "access_key_required", "Innlogging kreves", "Logg inn med passordet for å se vaktlisten.");
+
     public static ApiException InvalidSeason() =>
         new(400, "invalid_season", "Ugyldig sesong", "Oppgi season=autumn eller season=spring og et gyldig årstall.");
 

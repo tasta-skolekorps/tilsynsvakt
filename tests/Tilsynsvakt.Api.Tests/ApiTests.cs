@@ -16,15 +16,39 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string TestAdminUsername = "admin";
     public const string TestAdminPassword = "super-secret-test-password";
+    public const string TestAccessPassword = "test-access-password";
+
+    private readonly IReadOnlyDictionary<string, string?> _overrides;
 
     public ApiFactory()
+        : this(new Dictionary<string, string?>())
     {
+    }
+
+    internal ApiFactory(IReadOnlyDictionary<string, string?> overrides)
+    {
+        _overrides = overrides;
         Time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero));
         Stores = new InMemoryStores();
     }
 
     public FakeTimeProvider Time { get; }
     public InMemoryStores Stores { get; }
+
+    public static string TestApiKey => AccessKey.Derive(TestAccessPassword);
+
+    public HttpClient CreateClientWithoutApiKey()
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Remove(AccessKey.HeaderName);
+        return client;
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        client.DefaultRequestHeaders.Add(AccessKey.HeaderName, TestApiKey);
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -35,16 +59,29 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Calendar:Closed:0:To", "2000-01-02");
         builder.UseSetting("RateLimit:MutationsPerMinute", "10000");
         builder.UseSetting("RateLimit:AdminPerMinute", "10000");
+        builder.UseSetting("Access:Password", TestAccessPassword);
+        builder.UseSetting("RateLimit:LoginPerMinute", "10000");
+        foreach (var (key, value) in _overrides)
+        {
+            builder.UseSetting(key, value);
+        }
 
-        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-            new Dictionary<string, string?>
-            {
-                ["Admin:Username"] = TestAdminUsername,
-                ["Admin:Password"] = TestAdminPassword,
-                ["Frontend:Origin"] = "https://example.github.io",
-                ["RateLimit:MutationsPerMinute"] = "10000",
-                ["RateLimit:AdminPerMinute"] = "10000",
-            }));
+        var settings = new Dictionary<string, string?>
+        {
+            ["Admin:Username"] = TestAdminUsername,
+            ["Admin:Password"] = TestAdminPassword,
+            ["Frontend:Origin"] = "https://example.github.io",
+            ["RateLimit:MutationsPerMinute"] = "10000",
+            ["RateLimit:AdminPerMinute"] = "10000",
+            ["Access:Password"] = TestAccessPassword,
+            ["RateLimit:LoginPerMinute"] = "10000",
+        };
+        foreach (var (key, value) in _overrides)
+        {
+            settings[key] = value;
+        }
+
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
 
         builder.ConfigureServices(services =>
         {

@@ -6,13 +6,14 @@ public sealed class SyncException(string message) : Exception(message);
 
 public sealed record SyncOptions(
     string Username, string Password, Uri ApiBaseUrl, string GroupName,
-    string SubgroupName, bool DryRun, IReadOnlySet<DateOnly>? Dates)
+    string SubgroupName, bool DryRun, IReadOnlySet<DateOnly>? Dates, string ApiPassword)
 {
     public static SyncOptions FromEnvironment(Func<string, string?> read)
     {
         var username = Required(read, "SPOND_USERNAME");
         var password = Required(read, "SPOND_PASSWORD");
         var origin = Required(read, "API_BASE_URL");
+        var apiPassword = Required(read, "API_PASSWORD");
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("https" or "http") || !string.IsNullOrEmpty(uri.UserInfo) ||
             uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
@@ -40,7 +41,7 @@ public sealed record SyncOptions(
         }
         return new(username, password, uri,
             read("SPOND_GROUP_NAME") ?? "Tasta Skolekorps - Medlemmer",
-            read("SPOND_SUBGROUP_NAME") ?? "Tilsynsvakt", dryRun, dates);
+            read("SPOND_SUBGROUP_NAME") ?? "Tilsynsvakt", dryRun, dates, apiPassword);
     }
 
     private static string Required(Func<string, string?> read, string key) =>

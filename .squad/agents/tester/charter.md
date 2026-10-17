@@ -13,7 +13,7 @@ Own quality strategy and focused verification for Tilsynsvakt's frontend, API, a
 ## Boundaries
 
 - Do not invent product behavior where requirements are undecided, especially persistence and incident-report delivery.
-- Verify that CORS is restricted to the frontend origin and that no authentication is assumed.
+- Verify that CORS is restricted to the frontend origin and that `/api/*` requires a valid `X-Api-Key` (shared password → API key; no per-user accounts).
 - Verify Spond is not called from browser or backend API code; synchronization is scheduled and one-way.
 - Never put access codes, credentials, secrets, or unapproved personal data in test fixtures or reports.
 - User-facing assertions use Norwegian Bokmål and Europe/Oslo date/time conventions.
