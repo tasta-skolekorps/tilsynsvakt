@@ -1,6 +1,11 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddAzureContainerAppEnvironment("aca");
+// Push images to the shared, pre-existing registry instead of provisioning a new one.
+var acr = builder.AddAzureContainerRegistry("acr")
+    .PublishAsExisting("leifssharedacr", "rg-common");
+
+builder.AddAzureContainerAppEnvironment("aca")
+    .WithAzureContainerRegistry(acr);
 
 var storage = builder.AddAzureStorage("storage")
     .RunAsEmulator(azurite => azurite
