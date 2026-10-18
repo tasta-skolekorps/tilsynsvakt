@@ -71,6 +71,7 @@
         <div class="admin-tabs" role="tablist" aria-label="Administrasjon">
           <button id="tab-summering" type="button" role="tab" aria-controls="summering" aria-selected="true" tabindex="0">Summering</button>
           <button id="tab-vakter" type="button" role="tab" aria-controls="vakter" aria-selected="false" tabindex="-1">Vakter</button>
+          <button id="tab-musikanter" type="button" role="tab" aria-controls="musikanter" aria-selected="false" tabindex="-1">Musikanter</button>
         </div>
         <section id="summering" role="tabpanel" aria-labelledby="tab-summering" tabindex="0">
         <div class="section-heading">
@@ -86,6 +87,25 @@
         <h2 id="duties-heading" class="subheading">Alle vakter</h2>
         <div id="duties" class="admin-duty-list" aria-live="polite">
           <p class="loading">Laster vakter …</p>
+        </div>
+        </section>
+
+        <section id="musikanter" role="tabpanel" aria-labelledby="tab-musikanter" tabindex="0" hidden>
+        <h2 id="guards-heading" class="subheading">Musikanter</h2>
+        <p class="small-copy muted">Navnelisten viser kun musikantenes etternavn. Telefonnummeret er til forelderen som tar vakten.</p>
+        <form id="guard-create-form" class="admin-duty-card admin-guard-form" novalidate>
+          <h3 class="admin-guard-title">Legg til musikant</h3>
+          <label for="guard-new-name">Etternavn (musikant)</label>
+          <input id="guard-new-name" name="name" type="text" autocomplete="off" required minlength="2" maxlength="80" aria-describedby="guard-name-help">
+          <p id="guard-name-help" class="small-copy muted">Bruk kun musikantens etternavn – ikke foreldrenes navn.</p>
+          <label for="guard-new-phone">Telefon (forelder)</label>
+          <input id="guard-new-phone" name="phone" type="tel" autocomplete="off" inputmode="tel" required>
+          <div class="shift-actions">
+            <button class="button button-primary" type="submit">Legg til</button>
+          </div>
+        </form>
+        <div id="guard-list" class="admin-duty-list" aria-live="polite">
+          <p class="loading">Laster musikanter …</p>
         </div>
         </section>
       </section>

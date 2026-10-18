@@ -177,7 +177,7 @@ function clearApiData() {
   state.swaps = [];
   state.swapTarget = null;
   state.apiAvailable = false;
-  elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
+  elements.guardSelect.replaceChildren(new Option("Velg etternavn", ""));
   elements.guardSelect.disabled = true;
   elements.guardStatus.textContent = "Logg inn for å se navnelisten.";
   for (const container of [elements.myShifts, elements.allShifts]) {
@@ -304,11 +304,15 @@ function readStoredJson(key) {
   }
 }
 
+function sortGuardsByName(guards) {
+  return [...guards].sort((a, b) => a.name.localeCompare(b.name, "nb", { sensitivity: "base" }));
+}
+
 function renderGuardOptions(guards, { fromCache = false } = {}) {
   state.guardList = guards;
   const saved = readStoredJson(guardStorageKey);
-  elements.guardSelect.replaceChildren(new Option("Velg navn", ""));
-  for (const guard of guards) elements.guardSelect.add(new Option(guard.name, String(guard.id)));
+  elements.guardSelect.replaceChildren(new Option("Velg etternavn", ""));
+  for (const guard of sortGuardsByName(guards)) elements.guardSelect.add(new Option(guard.name, String(guard.id)));
   const match = guards.find(guard => guard.id === Number(saved?.id));
   if (match) {
     state.selectedGuardId = match.id;
@@ -459,7 +463,7 @@ function renderShifts() {
   const mine = guard ? assigned.filter(shift => shift.guard?.id === guard.id) : [];
   elements.myShifts.replaceChildren();
   elements.allShifts.replaceChildren();
-  if (!guard) elements.myShifts.append(node("p", "empty-state", "Velg navnet ditt øverst for å se vaktene dine."));
+  if (!guard) elements.myShifts.append(node("p", "empty-state", "Velg musikantens etternavn øverst for å se vaktene dine."));
   else if (!mine.length) elements.myShifts.append(node("p", "empty-state", "Du har ingen vakter i den viste perioden."));
   else for (const shift of mine) elements.myShifts.append(shiftCard(shift, true));
 
@@ -609,7 +613,7 @@ function makeReplaceControl(shift) {
 async function signUp(shift) {
   const guard = getSelectedGuard();
   if (!guard) {
-    showNotice("Velg navnet ditt øverst før du melder deg på.", "error");
+    showNotice("Velg musikantens etternavn øverst før du melder deg på.", "error");
     return;
   }
   await mutateShift(`/api/shifts/${shift.date}/signup`, {
@@ -626,7 +630,7 @@ async function cancelShift(shift) {
 async function mutateShift(path, options, successMessage) {
   clearNotice();
   if (!getSelectedGuard()) {
-    showNotice("Velg navnet ditt øverst før du endrer vaktlisten.", "error");
+    showNotice("Velg musikantens etternavn øverst før du endrer vaktlisten.", "error");
     return;
   }
   try {
@@ -650,8 +654,8 @@ async function mutateShift(path, options, successMessage) {
 function renderHandover() {
   const guard = getSelectedGuard();
   if (!guard) {
-    elements.nextHandover.textContent = "Velg navnet ditt for å se neste vakt.";
-    elements.rosterHandover.textContent = "Velg navnet ditt for å se overleveringen.";
+    elements.nextHandover.textContent = "Velg musikantens etternavn for å se neste vakt.";
+    elements.rosterHandover.textContent = "Velg musikantens etternavn for å se overleveringen.";
     return;
   }
   const ownShifts = state.shifts.filter(shift => shift.guard?.id === guard.id).sort((a, b) => a.date.localeCompare(b.date));
@@ -720,7 +724,7 @@ function renderSignoff() {
     box.append(node("p", "signoff-text", `${shift.guard.name} avsluttet vakten kl. ${time}. Takk for innsatsen!`));
   } else {
     box.append(node("p", "signoff-text", !own
-      ? `Dagens vakt er ${shift.guard.name}. Velg navnet ditt øverst for å avslutte vakten.`
+      ? `Dagens vakt er ${shift.guard.name}. Velg musikantens etternavn øverst for å avslutte vakten.`
       : complete ? "Alt er huket av. Du kan nå avslutte vakten." : "Huk av alle punktene for å kunne avslutte vakten."));
   }
   const button = node("button", `button ${signed ? "button-secondary" : "button-primary"}`, signed ? "Angre avslutning" : "Avslutt vakten");

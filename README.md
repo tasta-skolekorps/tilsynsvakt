@@ -32,6 +32,7 @@ flowchart LR
 | `config.js` | Runtime config: `window.TILSYNSVAKT_CONFIG = { apiBaseUrl: "..." }` |
 | `sw.js` | Service worker (offline cache) |
 | `data/` | Static JSON: `usage-plan.json`, `contacts.json` (guards live only in Table Storage via the API) |
+| `scripts/` | One-off admin scripts (e.g. `normalize-guard-names.ps1`) |
 | `src/Tilsynsvakt.Api/` | Minimal API, Table Storage stores, validation, ProblemDetails errors |
 | `src/Tilsynsvakt.AppHost/` | Aspire AppHost (API + Azurite locally, Azure Container Apps on publish) |
 | `src/Tilsynsvakt.ServiceDefaults/` | Aspire service defaults (health checks, telemetry) |
@@ -120,6 +121,15 @@ Then open `http://127.0.0.1:8080/` (guard site) or `http://127.0.0.1:8080/admin.
 ### Manage guards
 
 Guards are stored only in Table Storage. Add, edit or deactivate them through the admin API (`/api/admin/guards`).
+
+Guards are named by the child's last name. `scripts/normalize-guard-names.ps1` is a one-off cleanup that renames or merges active guards with other names (e.g. a parent's name) into the canonical list of children's last names, matched by phone number. Merging moves future duties to the canonical guard and deactivates the duplicate; guards without a phone match are only reported. The canonical list defaults to `git show ee780fd~1:data/guards.json` (override with `-CanonicalPath`). Always dry run first:
+
+```powershell
+$env:TILSYNSVAKT_API_URL = "https://<backend>"
+$env:TILSYNSVAKT_ADMIN_KEY = "<admin api key>"   # or TILSYNSVAKT_ADMIN_USERNAME + TILSYNSVAKT_ADMIN_PASSWORD
+./scripts/normalize-guard-names.ps1 -WhatIf
+./scripts/normalize-guard-names.ps1 -Confirm:$false
+```
 
 ## Tests
 
