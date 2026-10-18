@@ -342,24 +342,19 @@ function renderGuardList() {
     return;
   }
 
-  guardListElement.innerHTML = state.allGuards.map(guard => {
-    const nameId = `guard-name-${guard.id}`;
-    const phoneId = `guard-phone-${guard.id}`;
-    const activeId = `guard-active-${guard.id}`;
-    return `
-      <form class="admin-duty-card admin-guard-form" data-id="${guard.id}" novalidate>
-        <label for="${nameId}">Etternavn (musikant)</label>
-        <input id="${nameId}" name="name" type="text" autocomplete="off" required minlength="2" maxlength="80" value="${escapeHtml(guard.name)}" aria-describedby="${nameId}-help">
-        <p id="${nameId}-help" class="small-copy muted">Bruk kun musikantens etternavn – ikke foreldrenes navn.</p>
-        <label for="${phoneId}">Telefon (forelder)</label>
-        <input id="${phoneId}" name="phone" type="tel" autocomplete="off" inputmode="tel" required value="${escapeHtml(guard.phone ?? "")}">
-        <label class="admin-check" for="${activeId}"><input id="${activeId}" name="active" type="checkbox"${guard.active !== false ? " checked" : ""}> Aktiv i navnelisten</label>
-        <div class="shift-actions">
-          <button class="button button-primary" type="submit">Lagre</button>
-        </div>
-      </form>
-    `;
-  }).join("");
+  const activeGuards = state.allGuards.filter(guard => guard.active !== false);
+  const inactiveGuards = state.allGuards.filter(guard => guard.active === false);
+  const activeHtml = activeGuards.length
+    ? `<div id="guard-list-active" class="admin-duty-list">${activeGuards.map(renderGuardForm).join("")}</div>`
+    : '<p class="empty-state">Ingen aktive musikanter.</p>';
+  // Inactive guards stay in storage for past duties; keep them reachable so they can be reactivated.
+  const inactiveHtml = inactiveGuards.length
+    ? `<details id="guard-list-inactive" class="admin-inactive-guards">
+        <summary>Vis inaktive (${inactiveGuards.length})</summary>
+        <div class="admin-duty-list">${inactiveGuards.map(renderGuardForm).join("")}</div>
+      </details>`
+    : "";
+  guardListElement.innerHTML = activeHtml + inactiveHtml;
 
   guardListElement.querySelectorAll(".admin-guard-form").forEach(form => {
     form.addEventListener("submit", async event => {
@@ -371,6 +366,25 @@ function renderGuardList() {
         { ...input, active: target.elements.active.checked }, "Musikanten er oppdatert.");
     });
   });
+}
+
+function renderGuardForm(guard) {
+  const nameId = `guard-name-${guard.id}`;
+  const phoneId = `guard-phone-${guard.id}`;
+  const activeId = `guard-active-${guard.id}`;
+  return `
+    <form class="admin-duty-card admin-guard-form" data-id="${guard.id}" novalidate>
+      <label for="${nameId}">Etternavn (musikant)</label>
+      <input id="${nameId}" name="name" type="text" autocomplete="off" required minlength="2" maxlength="80" value="${escapeHtml(guard.name)}" aria-describedby="${nameId}-help">
+      <p id="${nameId}-help" class="small-copy muted">Bruk kun musikantens etternavn – ikke foreldrenes navn.</p>
+      <label for="${phoneId}">Telefon (forelder)</label>
+      <input id="${phoneId}" name="phone" type="tel" autocomplete="off" inputmode="tel" required value="${escapeHtml(guard.phone ?? "")}">
+      <label class="admin-check" for="${activeId}"><input id="${activeId}" name="active" type="checkbox"${guard.active !== false ? " checked" : ""}> Aktiv i navnelisten</label>
+      <div class="shift-actions">
+        <button class="button button-primary" type="submit">Lagre</button>
+      </div>
+    </form>
+  `;
 }
 
 function readGuardForm(form) {
