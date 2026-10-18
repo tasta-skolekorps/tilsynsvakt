@@ -157,6 +157,7 @@ Secrets are only stored as **GitHub Actions Secrets** and in the **Azure Contain
 `ACCESS_PASSWORD` (the shared guard password) must be a **repository-level** Actions secret so both the deploy job and the Spond sync job can read it. Use at least 12 characters (e.g. three random words). Set it before merging the auth change; rotating it logs everyone out.
 
 - Deploy (`production` environment): secrets `ADMIN_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ACCESS_PASSWORD`; variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`, `AZURE_RESOURCE_GROUP`, `FRONTEND_ORIGIN`.
+- Deploy identity: user-assigned managed identity `id-github-tilsynsvakt` in `rg-common`, with a federated credential for `repo:tasta-skolekorps/tilsynsvakt:environment:production` and Owner on `rg-tilsynsvakt-prod` (conditioned so it cannot grant Owner, User Access Administrator or RBAC Administrator). `AZURE_CLIENT_ID` is its client ID.
 - Spond sync: secrets `SPOND_USERNAME`, `SPOND_PASSWORD`, `ACCESS_PASSWORD` (passed to the tool as `API_PASSWORD` to log in to the API); variables `API_BASE_URL`, `SPOND_SYNC_DRY_RUN`, `SPOND_SYNC_DATES`.
 
 ## Conventions

@@ -55,7 +55,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Azure login (OIDC)
+      # AZURE_CLIENT_ID is the user-assigned managed identity id-github-tilsynsvakt in rg-common.
+      - name: Azure login (OIDC, managed identity)
         uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
