@@ -48,7 +48,7 @@ if (builder.ExecutionContext.IsPublishMode)
 #pragma warning disable ASPIREPIPELINES003 // WithRemoteImageName is experimental
     api.WithEnvironment("Storage__CreateTable", "true")
        // The registry is shared with other projects, so keep our repositories under a prefix.
-       .WithRemoteImageName("tilsynsvakt/api")
+       .WithRemoteImageName("tilsynsvakt-api")
        .WithExternalHttpEndpoints()
        .PublishAsAzureContainerApp((_, app) =>
        {
