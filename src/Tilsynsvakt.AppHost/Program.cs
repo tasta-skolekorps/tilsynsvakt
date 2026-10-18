@@ -45,7 +45,10 @@ if (builder.ExecutionContext.IsPublishMode)
     }
 
     // Aspire grants the API's managed identity Table Data Contributor, which is enough to create the table.
+#pragma warning disable ASPIREPIPELINES003 // WithRemoteImageName is experimental
     api.WithEnvironment("Storage__CreateTable", "true")
+       // The registry is shared with other projects, so keep our repositories under a prefix.
+       .WithRemoteImageName("tilsynsvakt/api")
        .WithExternalHttpEndpoints()
        .PublishAsAzureContainerApp((_, app) =>
        {
