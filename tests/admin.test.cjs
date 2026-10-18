@@ -7,12 +7,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 
 const baseUrl = process.env.ADMIN_TEST_URL || "http://127.0.0.1:8080";
 const guard = { id: 1, name: "Testvakt med et langt visningsnavn", phone: "", active: true };
-// Alphabetical (nb) as returned by the API; the inactive guard must not be offered.
+// Deliberately unsorted; the UI sorts with Norwegian collation and hides inactive guards from duty pickers.
 const adminGuards = [
-  { id: 9, name: "Bare i backend", phone: "", active: true },
+  { id: 3, name: "Ådland", phone: "+4790000001", active: true },
   guard,
   { id: 2, name: "Øvrebø", phone: "", active: false },
-  { id: 3, name: "Ådland", phone: "", active: true },
+  { id: 9, name: "Bare i backend", phone: "", active: true },
 ];
 const dutyList = {
   season: "autumn", year: 2026, from: "2026-09-01", to: "2026-11-28",
@@ -42,7 +42,7 @@ async function run() {
       await page.clock.setFixedTime(fixedNow);
       await page.route("**/api/admin/**", async route => {
         const url = new URL(route.request().url());
-        requests.push({ pathname: url.pathname, search: url.search, method: route.request().method() });
+        requests.push({ pathname: url.pathname, search: url.search, method: route.request().method(), body: route.request().postData() });
         if (url.pathname.endsWith("/guards")) {
           await route.fulfill({ json: adminGuards });
         } else if (responder) {
@@ -91,12 +91,16 @@ async function run() {
       assert.equal(await page.locator(".admin-duty-form").count(), 1);
       assert.equal(requests.length, beforeTabSwitch);
       await page.getByRole("tab", { name: "Vakter", exact: true }).press("ArrowRight");
+      assert.equal(await page.locator("#tab-musikanter").evaluate(element => element === document.activeElement), true);
+      await page.locator("#tab-musikanter").press("ArrowRight");
       assert.equal(await page.locator("#tab-summering").evaluate(element => element === document.activeElement), true);
       await page.locator("#tab-summering").press("ArrowLeft");
-      assert.equal(await page.locator("#tab-vakter").getAttribute("aria-selected"), "true");
-      await page.locator("#tab-vakter").press("Home");
+      assert.equal(await page.locator("#tab-musikanter").getAttribute("aria-selected"), "true");
+      await page.locator("#tab-musikanter").press("Home");
       assert.equal(await page.locator("#tab-summering").getAttribute("aria-selected"), "true");
       await page.locator("#tab-summering").press("End");
+      assert.equal(await page.locator("#tab-musikanter").getAttribute("aria-selected"), "true");
+      await page.locator("#tab-musikanter").press("ArrowLeft");
       assert.equal(await page.locator("#tab-vakter").getAttribute("aria-selected"), "true");
       await page.locator("#year-next").click();
       await page.waitForFunction(() => document.querySelector("#notice").hidden);
@@ -131,7 +135,40 @@ async function run() {
       console.log(`PASS: tabs, keyboard, hashes, reload, guard picker/session, save and layout at ${viewport.width}px`);
     }
 
-    for (const hash of ["#summering", "#vakter"]) {
+    const guardsPage = await openPage({ hash: "#musikanter" });
+    {
+      const { page, errors, requests } = guardsPage;
+      await page.locator("#guard-list .admin-guard-form").first().waitFor();
+      assert.equal(await page.locator("label[for=guard-new-name]").textContent(), "Etternavn (musikant)");
+      assert.equal(await page.locator("#guard-name-help").textContent(), "Bruk kun musikantens etternavn – ikke foreldrenes navn.");
+      assert.deepEqual(await page.locator("#guard-list input[name=name]").evaluateAll(inputs => inputs.map(input => input.value)),
+        ["Bare i backend", "Testvakt med et langt visningsnavn", "Øvrebø", "Ådland"]);
+      assert.equal(await page.locator("#guard-active-2").isChecked(), false);
+      await page.locator("#guard-new-name").fill("   ");
+      await page.locator("#guard-new-phone").fill("900 00 000");
+      await page.locator("#guard-create-form button[type=submit]").click();
+      assert.match(await page.locator("#notice").innerText(), /etternavn/);
+      assert.equal(requests.some(request => request.method === "POST"), false);
+      await page.locator("#guard-new-name").fill("  Nord   Hansen ");
+      await page.locator("#guard-create-form button[type=submit]").click();
+      await page.waitForFunction(() => document.querySelector("#notice").classList.contains("notice-success"));
+      const created = requests.find(request => request.method === "POST");
+      assert.equal(created.pathname, "/api/admin/guards");
+      assert.deepEqual(JSON.parse(created.body), { name: "Nord Hansen", phone: "900 00 000" });
+      assert.equal(await page.locator("#guard-new-name").inputValue(), "");
+      await page.locator("#guard-name-3").fill("Ådlandsvik");
+      await page.locator(".admin-guard-form[data-id='3'] button[type=submit]").click();
+      await page.waitForFunction(() => document.querySelector("#notice").textContent.includes("oppdatert"));
+      const updated = requests.find(request => request.method === "PUT" && request.pathname === "/api/admin/guards/3");
+      assert.deepEqual(JSON.parse(updated.body), { name: "Ådlandsvik", phone: "+4790000001", active: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert.deepEqual(errors, []);
+      await guardsPage.context.close();
+      console.log("PASS: musician last-name labels, nb sorting, create/edit with trimmed names");
+    }
+
+    for (const hash of ["#summering", "#vakter", "#musikanter"]) {
       const { context, page, errors } = await openPage({ hash });
       await page.waitForFunction(() => document.querySelector("#notice").hidden);
       assert.equal(await page.locator(`#tab-${hash.slice(1)}`).getAttribute("aria-selected"), "true");

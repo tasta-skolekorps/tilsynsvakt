@@ -119,6 +119,9 @@ async function run() {
       assert.equal(await page.locator("#login-password").inputValue(), "");
       assert.equal(await page.locator("#login-error").isVisible(), false);
       assert.equal(await page.locator("#logout").isVisible(), true);
+      assert.equal(await page.locator("label[for=guard-select]").textContent(), "Musikantens etternavn");
+      assert.deepEqual(await page.locator("#guard-select option").allTextContents(), ["Velg etternavn", "Neste vakt", "Testvakt"],
+        "names sorted with Norwegian collation");
 
       const logins = requests.filter(request => request.pathname === "/api/auth/login");
       assert.equal(logins.length, 2);

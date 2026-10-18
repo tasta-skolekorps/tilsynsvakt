@@ -8,6 +8,7 @@ const storageKeys = {
 
 const state = {
   guards: [],
+  allGuards: [],
   duties: [],
   showPast: false,
   loadVersion: 0,
@@ -26,9 +27,11 @@ const yearInput = document.querySelector("#year");
 const usernameInput = document.querySelector("#username");
 const passwordInput = document.querySelector("#password");
 const tabs = [...document.querySelectorAll('.admin-tabs [role="tab"]')];
+const guardListElement = document.querySelector("#guard-list");
+const guardCreateForm = document.querySelector("#guard-create-form");
 
 function selectTab(hash, focus = false) {
-  const selectedId = hash === "#vakter" ? "vakter" : "summering";
+  const selectedId = ["#vakter", "#musikanter"].includes(hash) ? hash.slice(1) : "summering";
   tabs.forEach(tab => {
     const selected = tab.getAttribute("aria-controls") === selectedId;
     tab.setAttribute("aria-selected", String(selected));
@@ -83,6 +86,15 @@ document.querySelector("#year-prev").addEventListener("click", () => stepYear(-1
 document.querySelector("#year-next").addEventListener("click", () => stepYear(1));
 seasonForm.addEventListener("change", () => loadAdminDataSafely());
 
+guardCreateForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = readGuardForm(form);
+  if (!input) return;
+  const saved = await saveGuard("/api/admin/guards", "POST", input, "Musikanten er lagt til.");
+  if (saved) form.reset();
+});
+
 seasonForm.addEventListener("submit", async event => {
   event.preventDefault();
   await loadAdminDataSafely();
@@ -114,6 +126,7 @@ async function loadAdminDataSafely() {
     if (version !== state.loadVersion) return;
     totalsElement.innerHTML = '<p class="empty-state">Kunne ikke laste summeringen. Prøv igjen.</p>';
     dutiesElement.innerHTML = '<p class="empty-state">Kunne ikke laste vaktene. Prøv igjen.</p>';
+    guardListElement.innerHTML = '<p class="empty-state">Kunne ikke laste musikantene. Prøv igjen.</p>';
     if (error.message === "Unauthorized") {
       setLoggedIn(false);
       renderNotice("Ugyldig brukernavn eller passord.", "error");
@@ -135,17 +148,20 @@ async function loadAdminData(version) {
   renderNotice("Laster …");
   totalsElement.innerHTML = '<p class="loading">Laster summering …</p>';
   dutiesElement.innerHTML = '<p class="loading">Laster vakter …</p>';
+  guardListElement.innerHTML = '<p class="loading">Laster musikanter …</p>';
   const [guards, dutyList] = await Promise.all([
     apiFetch("/api/admin/guards"),
     apiFetch(`/api/admin/duties?season=${encodeURIComponent(selectedSeason())}&year=${encodeURIComponent(yearInput.value)}`),
   ]);
   if (version !== state.loadVersion) return;
 
-  state.guards = guards.filter(guard => guard.active !== false);
+  state.allGuards = sortGuardsByName(guards);
+  state.guards = state.allGuards.filter(guard => guard.active !== false);
   state.duties = dutyList.duties;
   setLoggedIn(true);
   renderTotals(dutyList.totals);
   renderDuties(dutyList.duties);
+  renderGuardList();
   seasonRangeElement.textContent = `${formatDate(dutyList.from)}–${formatDate(dutyList.to)}`;
   renderNotice("");
 }
@@ -270,7 +286,7 @@ function renderDuties(allDuties) {
           <span class="badge ${duty.hasRecordedCheckOut ? "badge-actual" : "badge-planned"}">${duty.hasRecordedCheckOut ? "Registrert utsjekk" : "Planlagt slutt"}</span>
         </div>
         <form class="admin-duty-form" data-date="${duty.date}">
-          <label for="${selectId}">Tilsynsvakt</label>
+          <label for="${selectId}">Tilsynsvakt (musikantens etternavn)</label>
           <select id="${selectId}" name="guardId">${options}</select>
           <label for="${timeId}">Utsjekk (hh:mm)</label>
           <input id="${timeId}" name="checkOutTime" type="time" step="1800" value="${duty.hasRecordedCheckOut ? escapeHtml(duty.endTime) : ""}">
@@ -314,6 +330,81 @@ function renderDuties(allDuties) {
       }
     });
   });
+}
+
+function sortGuardsByName(guards) {
+  return [...guards].sort((a, b) => a.name.localeCompare(b.name, "nb", { sensitivity: "base" }));
+}
+
+function renderGuardList() {
+  if (!state.allGuards.length) {
+    guardListElement.innerHTML = '<p class="empty-state">Ingen musikanter er registrert ennå.</p>';
+    return;
+  }
+
+  guardListElement.innerHTML = state.allGuards.map(guard => {
+    const nameId = `guard-name-${guard.id}`;
+    const phoneId = `guard-phone-${guard.id}`;
+    const activeId = `guard-active-${guard.id}`;
+    return `
+      <form class="admin-duty-card admin-guard-form" data-id="${guard.id}" novalidate>
+        <label for="${nameId}">Etternavn (musikant)</label>
+        <input id="${nameId}" name="name" type="text" autocomplete="off" required minlength="2" maxlength="80" value="${escapeHtml(guard.name)}" aria-describedby="${nameId}-help">
+        <p id="${nameId}-help" class="small-copy muted">Bruk kun musikantens etternavn – ikke foreldrenes navn.</p>
+        <label for="${phoneId}">Telefon (forelder)</label>
+        <input id="${phoneId}" name="phone" type="tel" autocomplete="off" inputmode="tel" required value="${escapeHtml(guard.phone ?? "")}">
+        <label class="admin-check" for="${activeId}"><input id="${activeId}" name="active" type="checkbox"${guard.active !== false ? " checked" : ""}> Aktiv i navnelisten</label>
+        <div class="shift-actions">
+          <button class="button button-primary" type="submit">Lagre</button>
+        </div>
+      </form>
+    `;
+  }).join("");
+
+  guardListElement.querySelectorAll(".admin-guard-form").forEach(form => {
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const target = event.currentTarget;
+      const input = readGuardForm(target);
+      if (!input) return;
+      await saveGuard(`/api/admin/guards/${target.dataset.id}`, "PUT",
+        { ...input, active: target.elements.active.checked }, "Musikanten er oppdatert.");
+    });
+  });
+}
+
+function readGuardForm(form) {
+  const nameInput = form.elements.name;
+  const phoneInput = form.elements.phone;
+  const name = nameInput.value.trim().replace(/\s+/g, " ");
+  const phone = phoneInput.value.trim();
+  nameInput.value = name;
+  if (name.length < 2 || name.length > 80) {
+    renderNotice("Skriv musikantens etternavn (2–80 tegn).", "error");
+    nameInput.focus();
+    return null;
+  }
+  if (!phone) {
+    renderNotice("Skriv telefonnummeret til forelderen.", "error");
+    phoneInput.focus();
+    return null;
+  }
+  return { name, phone };
+}
+
+async function saveGuard(path, method, body, successMessage) {
+  try {
+    await apiFetch(path, { method, body: JSON.stringify(body) });
+    await loadAdminDataSafely();
+    renderNotice(successMessage, "success");
+    return true;
+  } catch (error) {
+    if (error.message === "Unauthorized") setLoggedIn(false);
+    renderNotice(error.message === "Unauthorized"
+      ? "Ugyldig brukernavn eller passord."
+      : `Kunne ikke lagre musikanten. ${error.message}`, "error");
+    return false;
+  }
 }
 
 function rememberCredentials() {
