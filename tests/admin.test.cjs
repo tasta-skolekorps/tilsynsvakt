@@ -37,14 +37,20 @@ async function run() {
       const errors = [];
       const consoleErrors = [];
       const requests = [];
+      const guards = adminGuards.map(candidate => ({ ...candidate }));
       page.on("pageerror", error => errors.push(error.message));
       page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
       await page.clock.setFixedTime(fixedNow);
       await page.route("**/api/admin/**", async route => {
         const url = new URL(route.request().url());
         requests.push({ pathname: url.pathname, search: url.search, method: route.request().method(), body: route.request().postData() });
+        const guardUpdate = url.pathname.match(/\/guards\/(\d+)$/);
         if (url.pathname.endsWith("/guards")) {
-          await route.fulfill({ json: adminGuards });
+          await route.fulfill({ json: guards });
+        } else if (guardUpdate && route.request().method() === "PUT") {
+          const existing = guards.find(candidate => candidate.id === Number(guardUpdate[1]));
+          Object.assign(existing, JSON.parse(route.request().postData()));
+          await route.fulfill({ json: existing });
         } else if (responder) {
           await responder(route, url);
         } else {
@@ -141,8 +147,15 @@ async function run() {
       await page.locator("#guard-list .admin-guard-form").first().waitFor();
       assert.equal(await page.locator("label[for=guard-new-name]").textContent(), "Etternavn (musikant)");
       assert.equal(await page.locator("#guard-name-help").textContent(), "Bruk kun musikantens etternavn – ikke foreldrenes navn.");
-      assert.deepEqual(await page.locator("#guard-list input[name=name]").evaluateAll(inputs => inputs.map(input => input.value)),
-        ["Bare i backend", "Testvakt med et langt visningsnavn", "Øvrebø", "Ådland"]);
+      const names = selector => page.locator(`${selector} input[name=name]`).evaluateAll(inputs => inputs.map(input => input.value));
+      assert.deepEqual(await names("#guard-list-active"), ["Bare i backend", "Testvakt med et langt visningsnavn", "Ådland"]);
+      assert.deepEqual(await names("#guard-list-inactive"), ["Øvrebø"]);
+      const inactive = page.locator("#guard-list-inactive");
+      assert.equal(await inactive.locator("summary").textContent(), "Vis inaktive (1)");
+      assert.equal(await inactive.evaluate(element => element.open), false);
+      assert.equal(await page.locator("#guard-name-2").isVisible(), false);
+      await inactive.locator("summary").click();
+      assert.equal(await page.locator("#guard-name-2").isVisible(), true);
       assert.equal(await page.locator("#guard-active-2").isChecked(), false);
       await page.locator("#guard-new-name").fill("   ");
       await page.locator("#guard-new-phone").fill("900 00 000");
@@ -161,11 +174,36 @@ async function run() {
       await page.waitForFunction(() => document.querySelector("#notice").textContent.includes("oppdatert"));
       const updated = requests.find(request => request.method === "PUT" && request.pathname === "/api/admin/guards/3");
       assert.deepEqual(JSON.parse(updated.body), { name: "Ådlandsvik", phone: "+4790000001", active: true });
+
+      const waitForNotice = () => page.waitForFunction(() => {
+        const notice = document.querySelector("#notice");
+        return !notice.hidden && notice.textContent.includes("oppdatert");
+      });
+      await page.evaluate(() => { document.querySelector("#notice").hidden = true; });
+      await page.locator("#guard-list-inactive summary").click();
+      await page.locator("#guard-phone-2").fill("900 00 002");
+      await page.locator("#guard-active-2").check();
+      await page.locator(".admin-guard-form[data-id='2'] button[type=submit]").click();
+      await waitForNotice();
+      assert.deepEqual(await names("#guard-list-active"), ["Bare i backend", "Testvakt med et langt visningsnavn", "Øvrebø", "Ådlandsvik"]);
+      assert.equal(await page.locator("#guard-list-inactive").count(), 0);
+      await page.evaluate(() => { document.querySelector("#notice").hidden = true; });
+      await page.locator("#guard-active-3").uncheck();
+      await page.locator(".admin-guard-form[data-id='3'] button[type=submit]").click();
+      await waitForNotice();
+      assert.deepEqual(await names("#guard-list-active"), ["Bare i backend", "Testvakt med et langt visningsnavn", "Øvrebø"]);
+      assert.deepEqual(await names("#guard-list-inactive"), ["Ådlandsvik"]);
+      assert.equal(await page.locator("#guard-list-inactive summary").textContent(), "Vis inaktive (1)");
+      assert.equal(await page.locator("#guard-list-inactive").evaluate(element => element.open), false);
+      await page.getByRole("tab", { name: "Vakter", exact: true }).click();
+      assert.deepEqual(await page.locator("#guard-2026-10-08 option").evaluateAll(items => items.map(item => item.textContent.trim())),
+        ["Ledig", "Bare i backend", "Testvakt med et langt visningsnavn", "Øvrebø"]);
+      await page.getByRole("tab", { name: "Musikanter" }).click();
       await page.setViewportSize({ width: 390, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       assert.deepEqual(errors, []);
       await guardsPage.context.close();
-      console.log("PASS: musician last-name labels, nb sorting, create/edit with trimmed names");
+      console.log("PASS: musician last-name labels, nb sorting, active list, collapsed inactive list, (de)activation, create/edit with trimmed names");
     }
 
     for (const hash of ["#summering", "#vakter", "#musikanter"]) {
