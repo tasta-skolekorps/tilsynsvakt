@@ -610,4 +610,13 @@ public sealed class SpondContractTests
                 ("groupMembers", System.Array.Empty<object>()))));
         Assert.NotNull(SpondClient.ReadState(state));
     }
+
+    [Fact]
+    public void ReadState_UnexpectedSettingsNamesEventAndFields()
+    {
+        var state = WithFields(EventJson(), ("commentsDisabled", false), ("visibility", "ALL"));
+        var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(state));
+        Assert.Contains("visibility, commentsDisabled", error.Message);
+        Assert.Contains("ingen endringer sendt", error.Message);
+    }
 }

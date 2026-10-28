@@ -127,10 +127,16 @@ public sealed class SpondClient(HttpClient http)
         var start = Instant(item, "startTimestamp");
         var meet = item.TryGetProperty("meetupTimestamp", out var meetup) && meetup.ValueKind == JsonValueKind.String
             ? Instant(item, "meetupTimestamp") : start.AddMinutes(-Property(item, "meetupPrior").GetDouble());
-        if (Text(item, "type") != "EVENT" || Text(item, "visibility") != "INVITEES" ||
-            Text(item, "autoReminderType") != "REMIND_48H_BEFORE" ||
-            !Property(item, "commentsDisabled").GetBoolean() || !Property(item, "participantsHidden").GetBoolean())
-            throw new SyncException("Uventede innstillinger i eid arrangement; ingen endringer sendt.");
+        var unexpected = new List<string>();
+        if (Text(item, "type") != "EVENT") unexpected.Add("type");
+        if (Text(item, "visibility") != "INVITEES") unexpected.Add("visibility");
+        if (Text(item, "autoReminderType") != "REMIND_48H_BEFORE") unexpected.Add("autoReminderType");
+        if (!Property(item, "commentsDisabled").GetBoolean()) unexpected.Add("commentsDisabled");
+        if (!Property(item, "participantsHidden").GetBoolean()) unexpected.Add("participantsHidden");
+        if (unexpected.Count > 0)
+            throw new SyncException(
+                $"Uventede innstillinger i eid arrangement {SyncCalendar.Today(start):dd.MM.yyyy} " +
+                $"(id {OptionalText(item, "id") ?? "ukjent"}): {string.Join(", ", unexpected)}; ingen endringer sendt.");
         return new EventSpec(Text(item, "heading"), Text(item, "description"), Text(Property(item, "location"), "feature"),
             meet, start, Instant(item, "endTimestamp"), Instant(item, "inviteTime"), Text(group, "id"), Text(subgroups[0], "id"),
             guardians.Select(guardian => Text(guardian, "profileId")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
