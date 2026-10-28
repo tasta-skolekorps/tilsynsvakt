@@ -298,13 +298,17 @@ public sealed class SpondClient(HttpClient http)
     }
 
     internal static JsonElement Property(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) ? value : throw new SyncException("Ufullstendig ekstern respons.");
+        element.TryGetProperty(name, out var value) ? value : throw Incomplete(name);
 
     internal static JsonElement[] Array(JsonElement element) => element.ValueKind == JsonValueKind.Array
         ? element.EnumerateArray().ToArray() : throw new SyncException("Uventet format i ekstern respons.");
 
     internal static string Text(JsonElement element, string name) =>
-        OptionalText(element, name) is { Length: > 0 } value ? value : throw new SyncException("Ufullstendig ekstern respons.");
+        OptionalText(element, name) is { Length: > 0 } value ? value : throw Incomplete(name);
+
+    // Only the constant field name is included; external values and identifiers are never logged.
+    internal static SyncException Incomplete(string field) =>
+        new($"Ufullstendig ekstern respons (mangler felt «{field}»).");
 
     internal static string? OptionalText(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.GetString() : null;

@@ -53,20 +53,42 @@ public static class SpondPayloads
     public static JsonElement Metadata(JsonElement current, string heading, string description)
     {
         if (SpondClient.Text(current, "type") != "EVENT") throw new SyncException("Bare enkeltarrangementer kan endres.");
-        var fields = new[] { "id", "startTimestamp", "endTimestamp", "commentsDisabled", "inviteTime", "location",
-            "owners", "visibility", "participantsHidden", "autoReminderType", "autoAccept", "attachments", "tasks" };
-        var payload = fields.ToDictionary(field => field, field => SpondClient.Property(current, field).Clone());
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["id"] = JsonSerializer.SerializeToElement(SpondClient.Text(current, "id")),
+            ["startTimestamp"] = JsonSerializer.SerializeToElement(SpondClient.Text(current, "startTimestamp")),
+            ["endTimestamp"] = JsonSerializer.SerializeToElement(SpondClient.Text(current, "endTimestamp")),
+        };
+        // Settings are preserved when Spond returns them; absent optional fields are omitted rather than invented.
+        foreach (var field in new[] { "commentsDisabled", "inviteTime", "visibility", "participantsHidden",
+            "autoReminderType", "autoAccept" })
+            if (Present(current, field, out var value)) payload[field] = value.Clone();
+        payload["attachments"] = Present(current, "attachments", out var attachments) && attachments.ValueKind == JsonValueKind.Array
+            ? attachments.Clone() : JsonSerializer.SerializeToElement(System.Array.Empty<object>());
+        payload["tasks"] = Present(current, "tasks", out var tasks) && tasks.ValueKind == JsonValueKind.Object
+            ? tasks.Clone()
+            : JsonSerializer.SerializeToElement(new { openTasks = System.Array.Empty<object>(), assignedTasks = System.Array.Empty<object>() });
         payload["heading"] = JsonSerializer.SerializeToElement(heading);
         payload["description"] = JsonSerializer.SerializeToElement(description);
         payload["spondType"] = JsonSerializer.SerializeToElement("EVENT");
         payload["rsvpDate"] = JsonSerializer.SerializeToElement<object?>(null);
         payload["matchInfo"] = JsonSerializer.SerializeToElement<object?>(null);
-        payload["owners"] = JsonSerializer.SerializeToElement(SpondClient.Array(SpondClient.Property(current, "owners"))
-            .Select(owner => new { id = SpondClient.Text(owner, "id") }).ToArray());
-        var location = SpondClient.Property(current, "location");
-        payload["location"] = JsonSerializer.SerializeToElement(new { id = SpondClient.Text(location, "id"), feature = SpondClient.Text(location, "feature") });
+        if (Present(current, "owners", out var owners))
+            payload["owners"] = JsonSerializer.SerializeToElement(SpondClient.Array(owners)
+                .Select(owner => SpondClient.OptionalText(owner, "id")).Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => new { id }).ToArray());
+        if (Present(current, "location", out var location))
+        {
+            var feature = SpondClient.Text(location, "feature");
+            payload["location"] = SpondClient.OptionalText(location, "id") is { Length: > 0 } locationId
+                ? JsonSerializer.SerializeToElement(new { id = locationId, feature })
+                : JsonSerializer.SerializeToElement(new { feature });
+        }
         payload["payment"] = current.TryGetProperty("payment", out var payment) && payment.ValueKind == JsonValueKind.Object
             ? payment.Clone() : JsonSerializer.SerializeToElement(new { });
         return JsonSerializer.SerializeToElement(payload);
     }
+
+    private static bool Present(JsonElement element, string name, out JsonElement value) =>
+        element.TryGetProperty(name, out value) && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
 }

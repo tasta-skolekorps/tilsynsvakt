@@ -97,6 +97,65 @@ public sealed class SpondContractTests
             Assert.Equal(fields[field].GetRawText(), payload.GetProperty(field).GetRawText());
     }
 
+    [Fact]
+    public void Metadata_ToleratesMissingOptionalFields()
+    {
+        var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
+        fields.Remove("attachments");
+        fields["tasks"] = JsonSerializer.SerializeToElement<object?>(null);
+        fields["location"] = JsonSerializer.SerializeToElement(new { feature = SyncPlanner.Location });
+        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), "Test", SyncPlanner.Marker(Date));
+        Assert.Empty(payload.GetProperty("attachments").EnumerateArray());
+        Assert.Empty(payload.GetProperty("tasks").GetProperty("openTasks").EnumerateArray());
+        Assert.Empty(payload.GetProperty("tasks").GetProperty("assignedTasks").EnumerateArray());
+        Assert.False(payload.GetProperty("location").TryGetProperty("id", out _));
+        Assert.Equal(SyncPlanner.Location, payload.GetProperty("location").GetProperty("feature").GetString());
+        Assert.Equal("test-event", payload.GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("startTimestamp")]
+    [InlineData("endTimestamp")]
+    [InlineData("type")]
+    public void Metadata_RequiredFieldsStayStrictAndAreNamed(string field)
+    {
+        var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
+        fields.Remove(field);
+        var error = Assert.Throws<SyncException>(() =>
+            SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), "Test", SyncPlanner.Marker(Date)));
+        Assert.Equal($"Ufullstendig ekstern respons (mangler felt «{field}»).", error.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SucceedsWhenEventLacksAttachmentsTasksAndLocationId()
+    {
+        var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
+        fields.Remove("attachments");
+        fields.Remove("tasks");
+        fields["description"] = JsonSerializer.SerializeToElement("Gammel tekst\n" + SyncPlanner.Marker(Date));
+        fields["location"] = JsonSerializer.SerializeToElement(new { feature = SyncPlanner.Location });
+        var state = JsonSerializer.SerializeToElement(fields);
+        var prior = SpondClient.ReadState(state)!;
+        JsonElement? written = null;
+        using var handler = new MockHandler(async request =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(state);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            written = await request.Content!.ReadFromJsonAsync<JsonElement>();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        using var http = new HttpClient(handler);
+        var action = new SyncAction(Date, SyncActionKind.Update, "Test guard", "test-event", Desired) { PriorState = prior };
+        var reported = new List<SyncAction>();
+        await new SpondClient(http).ExecutePlanAsync([action], Group, false, Now, reported.Add);
+        Assert.Equal(action, Assert.Single(reported));
+        Assert.NotNull(written);
+        Assert.Equal(Desired.Description, written.Value.GetProperty("description").GetString());
+        Assert.Empty(written.Value.GetProperty("attachments").EnumerateArray());
+        Assert.False(written.Value.GetProperty("location").TryGetProperty("id", out _));
+    }
+
     private static JsonElement EventJson(string id = "test-event", string profileId = "test-profile", string heading = SyncPlanner.Heading)
     {
         var fields = SpondPayloads.Create(Desired, Group, "test-owner").EnumerateObject()
