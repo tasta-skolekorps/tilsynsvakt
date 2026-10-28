@@ -228,7 +228,7 @@ public sealed class SpondClient(HttpClient http)
                     ValidatePriorState(current, action.PriorState);
                 }
                 if (action.Kind == SyncActionKind.Update)
-                    _ = SpondPayloads.Metadata(current, action.Desired!.Heading, action.Desired.Description);
+                    _ = SpondPayloads.Metadata(current, action.Desired!);
             }
         }
         foreach (var action in actions)
@@ -243,8 +243,8 @@ public sealed class SpondClient(HttpClient http)
                         action.PriorState);
                     break;
                 case SyncActionKind.Update:
-                    await UpdateEventMetadataAsync(action.EventId!, action.Date, group.Id,
-                        action.Desired!.Heading, action.Desired.Description, now, cancellationToken, action.PriorState);
+                    await UpdateEventAsync(action.EventId!, action.Date, group.Id,
+                        action.Desired!, now, cancellationToken, action.PriorState);
                     break;
             }
             report(action);
@@ -288,23 +288,22 @@ public sealed class SpondClient(HttpClient http)
         return document.RootElement.Clone();
     }
 
-    public async Task<bool> UpdateEventMetadataAsync(string eventId, DateOnly date, string groupId,
-        string heading, string description, DateTimeOffset now, CancellationToken cancellationToken = default,
+    // Always writes, even when Spond already matches, so every owned event is refreshed from the backend.
+    public async Task UpdateEventAsync(string eventId, DateOnly date, string groupId,
+        EventSpec desired, DateTimeOffset now, CancellationToken cancellationToken = default,
         EventSpec? expectedState = null)
     {
         var current = await GetEventAsync(eventId, cancellationToken);
         ValidateOwned(current, date, groupId, now);
         ValidatePriorState(current, expectedState);
-        if (SyncPlanner.OwnedDate(description) != date)
+        if (SyncPlanner.OwnedDate(desired.Description) != date || SyncCalendar.Today(desired.Start) != date ||
+            desired.Start <= now)
             throw new SyncException("Arrangementet kan ikke endres sikkert; ingen endringer sendt.");
-        if (Text(current, "heading") == heading && OptionalText(current, "description") == description)
-            return false;
 
-        var payload = SpondPayloads.Metadata(current, heading, description);
+        var payload = SpondPayloads.Metadata(current, desired);
         using var response = await http.PostAsJsonAsync(new Uri(BaseUrl, $"sponds/{Uri.EscapeDataString(eventId)}"),
             payload, cancellationToken);
         EnsureSuccess(response);
-        return true;
     }
 
     private static void EnsureSuccess(HttpResponseMessage response)

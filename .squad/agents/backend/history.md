@@ -52,3 +52,5 @@
 - `Access:Password` is required in every environment (fail closed before `Build()`). The dev placeholder is in `appsettings.Development.json`.
 - SpondSync logs in with `API_PASSWORD` through `BackendClient.LoginAsync`, then sends `X-Api-Key` via DefaultRequestHeaders.
 - Don't add `.Accepts<T>("application/json")` to endpoints that read the body with `Req.BodyAsync`. Endpoint metadata turns away other content types with an empty 415 before the handler runs, so the `unsupported_media_type` problem body never reaches the client.
+
+- 2026-10-28: Spond sync now rewrites every owned, matched event on each run (UpdateEventAsync always POSTs heading/description/start/end/location; planner emits Update even when equivalent; report shows 'oppdatert (ingen endringer)'). Description gained '(der kan du bytte vakten din selv og fylle ut sjekklisten i stedet for skjema i perm)' after the password, and a blank line before the marker; OwnedDate trims lines so legacy single-newline markers still match.

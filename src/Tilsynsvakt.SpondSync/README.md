@@ -2,7 +2,7 @@
 
 This .NET 10 console tool reads the backend roster and synchronizes owned Spond
 events using the user-supplied schema verified on 05.10.2026. `DRY_RUN` defaults
-to `true`; explicit `false` enables creation, quiet deletion and metadata-only
+to `true`; explicit `false` enables creation, quiet deletion and in-place
 updates. Empty plans and phone-not-found/no-profile skips exit 0. No application
 or live service was run while implementing these contracts; tests use local mocks.
 
@@ -45,9 +45,15 @@ or live service was run while implementing these contracts; tests use local mock
 - Changed guardian set: quietly DELETE the owned future event, then CREATE its
   replacement. No recipient-removal contract is invented. Preflight validates
   all payloads before writes; the replacement is not atomic and has no retries.
-- Metadata-only POST preserves invitation, location ID, owners, attachments and
-  tasks, uses the verified update shape, and never includes recipients/responses.
-  Fresh reads check ownership, group and actual future start before update/delete.
+- Every owned, matched future event with an unchanged guardian set is updated on
+  every run (`Update` action), even when it already matches, so Spond always
+  reflects the backend. The POST rewrites heading, description, start/end time and
+  location from the backend-derived `EventSpec`; it preserves invitation, owners,
+  attachments, tasks and the location ID (only while the location text is
+  unchanged), uses the verified update shape, and never includes
+  recipients/responses. Group, subgroup, `autoAccept` or invitation differences
+  still fail closed. Fresh reads check ownership, group and actual future start
+  before update/delete.
 - Explicit guardian `profileId` readback produces a normalized state for local
   idempotence. The supplied GET inventory does not establish guardian item fields;
   unreadable recipient state fails closed, rather than claiming live idempotence.
@@ -79,8 +85,10 @@ desired invite time, so the sync neither fails nor reschedules the invitation.
   `ACCESS_PASSWORD`. Neither the password nor the key is ever logged. The same
   password is also written into the Spond event description (Spond events are
   visible only to logged-in members) so guards can log in to the website:
-  `Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: {API_PASSWORD}), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!`
-  followed by the ownership marker line. It must not be empty or contain line
+  `Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: {API_PASSWORD}) (der kan du bytte vakten din selv og fylle ut sjekklisten i stedet for skjema i perm), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!`
+  followed by a blank line and the ownership marker line. Marker parsing trims
+  each line, so older events with a single newline (or stray whitespace) around
+  the marker are still recognised and rewritten to the new layout. It must not be empty or contain line
   breaks. Rotating `ACCESS_PASSWORD` updates the description of owned future events
   on the next sync. The value is never committed; GitHub masks it in Actions logs.
 - `SPOND_GROUP_NAME`: defaults to `Tasta Skolekorps - Medlemmer`.
@@ -98,7 +106,8 @@ Spond data is persisted.
 
 Output: a header (`Tørrkjøring – ingen endringer sendes til Spond` or `Skriver til
 Spond`) with the date window, then exactly one line per date in both modes:
-`vil opprette`/`opprettet`, `vil oppdatere (felter)`/`oppdatert (felter)`,
+`vil opprette`/`opprettet`, `vil oppdatere (felter)`/`oppdatert (felter)` (`(ingen
+endringer)` when an already-synced event is rewritten without differences),
 `vil slette`/`slettet`, `vil erstatte (ny vakt)`/`erstattet` (guard change),
 `uendret` or `ingen vakt`. Skips and missing-profile notices stay `::warning::`
 lines; a manual-event date prints `::warning::<dato> manuelt arrangement finnes;
@@ -234,6 +243,10 @@ are made; a single 72-hour enum must not be claimed to implement both reminders.
 
 ## Limited Metadata Transport
 
+> Superseded: `UpdateEventMetadataAsync` was replaced by `UpdateEventAsync`,
+> which always POSTs and also rewrites start/end time and location (see Current
+> Contract). The record below is historical.
+
 `GetEventAsync` reads fresh single-event JSON in memory. `UpdateEventMetadataAsync`
 changes only `heading` and `description`. Before POST it verifies the exact marker
 date, group ID, actual start instant (strictly future), matching Oslo start date,
@@ -274,8 +287,9 @@ returns `IReadOnlyList<SyncAction>` with `Create`, `Update`, `Delete`, `SkipUnma
 The project grants internals to `Tilsynsvakt.SpondSync.Tests` as well.
 
 `ExistingEvent(string Id, string? Description, EventSpec? VerifiedState)` owns a
-date only through an exact description marker line. Equivalent verified states
-produce no action, including guardian order differences. Runtime reads set
+date only through a description line that, trimmed, is exactly the marker.
+Verified states with the same guardian set (in any order) always produce an
+`Update` action so each run refreshes the event from the backend. Runtime reads set
 `VerifiedState=null`: recipient/invitation readback is unverified, so runtime
 idempotence cannot yet be claimed. An existing event is conservatively proposed
 for update, never written by the executable. Full normalized `EventSpec` cannot

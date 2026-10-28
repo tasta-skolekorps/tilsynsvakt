@@ -72,8 +72,11 @@ public static class SyncPlanner
     {
         if (string.IsNullOrWhiteSpace(sitePassword) || sitePassword.AsSpan().IndexOfAny('\r', '\n') >= 0)
             throw new SyncException("Nettsidepassordet kan ikke brukes i arrangementsbeskrivelsen (tomt eller inneholder linjeskift).");
-        return $"Se nettside {WebsiteUrl} for informasjon (passord: {sitePassword}), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!";
+        return $"Se nettside {WebsiteUrl} for informasjon (passord: {sitePassword}) (der kan du bytte vakten din selv og fylle ut sjekklisten i stedet for skjema i perm), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!";
     }
+
+    // A blank line keeps the machine marker visually apart from the human text in Spond.
+    public const string MarkerSeparator = "\n\n";
 
     public static string Marker(DateOnly date) => $"[tilsynsvakt-sync:{date:yyyy-MM-dd}]";
 
@@ -82,8 +85,9 @@ public static class SyncPlanner
         if (description is null) return null;
         const string prefix = "[tilsynsvakt-sync:";
         var dates = new List<DateOnly>();
-        foreach (var line in description.Replace("\r\n", "\n").Split('\n'))
+        foreach (var raw in description.Replace("\r\n", "\n").Split('\n'))
         {
+            var line = raw.Trim();
             if (line.Length == prefix.Length + 11 && line.StartsWith(prefix, StringComparison.Ordinal) &&
                 line.EndsWith(']') && DateOnly.TryParseExact(line.AsSpan(prefix.Length, 10), "yyyy-MM-dd",
                     CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
@@ -140,7 +144,7 @@ public static class SyncPlanner
         NormalizePhone(phone) is { } normalized ? normalized[^2..] : null;
 
     public static EventSpec DesiredEvent(DateOnly date, TargetGroup group, IReadOnlyList<string> guardianIds, string sitePassword) =>
-        new(Heading, Description(sitePassword) + "\n" + Marker(date), Location,
+        new(Heading, Description(sitePassword) + MarkerSeparator + Marker(date), Location,
             SyncCalendar.At(date, new TimeOnly(16, 40)), SyncCalendar.At(date, new TimeOnly(16, 45)),
             SyncCalendar.At(date, new TimeOnly(22, 0)), SyncCalendar.At(date.AddDays(-7), new TimeOnly(16, 45)),
             group.Id, group.SubgroupId, guardianIds.Order(StringComparer.Ordinal).ToArray());
@@ -205,9 +209,10 @@ public static class SyncPlanner
                     { PriorState = current.VerifiedState });
                 actions.Add(new(date, SyncActionKind.Create, shift.Guard.Name, null, desired));
             }
-            else if (!Equivalent(current.VerifiedState, desired))
+            else
             {
-                if (!Equivalent(current.VerifiedState with { Heading = desired.Heading, Description = desired.Description }, desired))
+                // Every owned event is rewritten from the backend on each run, even when it looks unchanged.
+                if (!Equivalent(Updatable(current.VerifiedState, desired), desired))
                     throw new SyncException("Endring av arrangementsinnstillinger kan ikke utføres sikkert.");
                 actions.Add(new(date, SyncActionKind.Update, shift.Guard.Name, current.Id, desired)
                     { PriorState = current.VerifiedState });
@@ -215,6 +220,13 @@ public static class SyncPlanner
         }
         return actions;
     }
+
+    // Fields an in-place update rewrites; meetup follows the start because Spond keeps meetupPrior.
+    internal static EventSpec Updatable(EventSpec current, EventSpec desired) => current with
+    {
+        Heading = desired.Heading, Description = desired.Description, Location = desired.Location,
+        Start = desired.Start, End = desired.End, Meet = current.Meet + (desired.Start - current.Start)
+    };
 
     internal static bool Equivalent(EventSpec? current, EventSpec desired) => current is not null &&
         current with { GuardianIds = desired.GuardianIds, InviteAt = current.InviteAt ?? desired.InviteAt } == desired &&

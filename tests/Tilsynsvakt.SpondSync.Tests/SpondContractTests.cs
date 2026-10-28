@@ -86,7 +86,7 @@ public sealed class SpondContractTests
         var fields = source.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
         fields["id"] = JsonSerializer.SerializeToElement("test-event");
         fields["location"] = JsonSerializer.SerializeToElement(new { id = "test-location", feature = SyncPlanner.Location });
-        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), "Test", SyncPlanner.Marker(Date));
+        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), Desired with { Heading = "Test" });
         Assert.False(payload.TryGetProperty("recipients", out _));
         Assert.False(payload.TryGetProperty("meetupPrior", out _));
         Assert.False(payload.TryGetProperty("maxAccepted", out _));
@@ -98,13 +98,28 @@ public sealed class SpondContractTests
     }
 
     [Fact]
+    public void Metadata_RewritesTimeAndLocationFromDesired()
+    {
+        var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
+        fields["startTimestamp"] = JsonSerializer.SerializeToElement("2026-11-26T16:15:00Z");
+        fields["endTimestamp"] = JsonSerializer.SerializeToElement("2026-11-26T20:30:00Z");
+        fields["location"] = JsonSerializer.SerializeToElement(new { id = "test-location", feature = "Gammelt sted" });
+        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), Desired);
+        Assert.Equal("2026-11-26T15:45:00Z", payload.GetProperty("startTimestamp").GetString());
+        Assert.Equal("2026-11-26T21:00:00Z", payload.GetProperty("endTimestamp").GetString());
+        Assert.Equal(SyncPlanner.Location, payload.GetProperty("location").GetProperty("feature").GetString());
+        Assert.False(payload.GetProperty("location").TryGetProperty("id", out _));
+        Assert.Equal(Desired.Description, payload.GetProperty("description").GetString());
+    }
+
+    [Fact]
     public void Metadata_ToleratesMissingOptionalFields()
     {
         var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
         fields.Remove("attachments");
         fields["tasks"] = JsonSerializer.SerializeToElement<object?>(null);
         fields["location"] = JsonSerializer.SerializeToElement(new { feature = SyncPlanner.Location });
-        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), "Test", SyncPlanner.Marker(Date));
+        var payload = SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), Desired with { Heading = "Test" });
         Assert.Empty(payload.GetProperty("attachments").EnumerateArray());
         Assert.Empty(payload.GetProperty("tasks").GetProperty("openTasks").EnumerateArray());
         Assert.Empty(payload.GetProperty("tasks").GetProperty("assignedTasks").EnumerateArray());
@@ -123,7 +138,7 @@ public sealed class SpondContractTests
         var fields = EventJson().EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
         fields.Remove(field);
         var error = Assert.Throws<SyncException>(() =>
-            SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), "Test", SyncPlanner.Marker(Date)));
+            SpondPayloads.Metadata(JsonSerializer.SerializeToElement(fields), Desired with { Heading = "Test" }));
         Assert.Equal($"Ufullstendig ekstern respons (mangler felt «{field}»).", error.Message);
     }
 
@@ -236,8 +251,10 @@ public sealed class SpondContractTests
         using var http = new HttpClient(handler);
         var existing = (await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now)).Owned;
         Assert.Single(existing);
-        Assert.Empty(SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))], existing,
+        var action = Assert.Single(SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))], existing,
             Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword));
+        Assert.Equal(SyncActionKind.Update, action.Kind);
+        Assert.Empty(SyncReport.ChangedFields(action.PriorState, action.Desired));
     }
 
     [Theory]
@@ -588,7 +605,7 @@ public sealed class SpondContractTests
     }
 
     [Fact]
-    public async Task MetadataTransport_PreservesScheduledFieldsAndSecondRunIsNoOp()
+    public async Task UpdateTransport_PreservesScheduledFieldsAndRewritesEveryRun()
     {
         var state = EventJson(heading: "Test old heading");
         var writes = 0;
@@ -606,9 +623,9 @@ public sealed class SpondContractTests
         });
         using var http = new HttpClient(handler);
         var client = new SpondClient(http);
-        Assert.True(await client.UpdateEventMetadataAsync("test-event", Date, Group.Id, Desired.Heading, Desired.Description, Now));
-        Assert.False(await client.UpdateEventMetadataAsync("test-event", Date, Group.Id, Desired.Heading, Desired.Description, Now));
-        Assert.Equal(1, writes);
+        await client.UpdateEventAsync("test-event", Date, Group.Id, Desired, Now);
+        await client.UpdateEventAsync("test-event", Date, Group.Id, Desired, Now);
+        Assert.Equal(2, writes);
     }
 
     [Theory]
