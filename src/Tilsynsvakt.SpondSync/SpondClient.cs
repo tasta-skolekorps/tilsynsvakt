@@ -113,6 +113,27 @@ public sealed class SpondClient(HttpClient http)
 
     internal static EventSpec? ReadState(JsonElement item)
     {
+        try
+        {
+            return ReadStateCore(item);
+        }
+        catch (SyncException error) when (error.Message.StartsWith("Ufullstendig ekstern respons", StringComparison.Ordinal))
+        {
+            throw new SyncException($"{error.Message.TrimEnd('.')} i eid arrangement {EventLabel(item)}; ingen endringer sendt.");
+        }
+    }
+
+    private static string EventLabel(JsonElement item)
+    {
+        var date = item.TryGetProperty("startTimestamp", out var start) && start.ValueKind == JsonValueKind.String &&
+            DateTimeOffset.TryParse(start.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var instant)
+            ? SyncCalendar.Today(instant).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) : "ukjent dato";
+        var id = item.TryGetProperty("id", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        return $"{date} (id {(string.IsNullOrWhiteSpace(id) ? "ukjent" : id)})";
+    }
+
+    private static EventSpec? ReadStateCore(JsonElement item)
+    {
         var recipients = Property(item, "recipients");
         var group = Property(recipients, "group");
         var guardians = Array(Property(recipients, "guardians"));
