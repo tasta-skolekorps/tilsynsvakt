@@ -241,6 +241,16 @@ Verified reminder enum values: `DISABLED`, `REMIND_24H_BEFORE`,
 plus an additional three-day reminder are NOT established. No reminder writes
 are made; a single 72-hour enum must not be claimed to implement both reminders.
 
+Owned events are accepted with `autoReminderType` set to `REMIND_48H_BEFORE`
+(as created) or `DISABLED`. Spond can report `DISABLED` once the 48-hour
+reminder has fired, or an owner may switch it off manually; neither should stop
+the sync. Any other value (including `REMIND_24H_BEFORE`/`REMIND_72H_BEFORE`) or
+a missing field still fails closed with no changes sent. Reminder type is not
+part of the diff (`EventSpec` does not carry it), so a `DISABLED` event never
+triggers an update on its own, and metadata updates forward the current value
+unchanged instead of re-enabling `REMIND_48H_BEFORE`, avoiding duplicate
+reminders and perpetual diffs.
+
 ## Limited Metadata Transport
 
 > Superseded: `UpdateEventMetadataAsync` was replaced by `UpdateEventAsync`,

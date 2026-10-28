@@ -152,14 +152,16 @@ public sealed class SpondClient(HttpClient http)
             ? Instant(item, "meetupTimestamp") : start.AddMinutes(-Property(item, "meetupPrior").GetDouble());
         // Settings are compared leniently so a missing or mistyped field is reported by name instead of aborting the parse.
         var unexpected = new List<string>();
-        foreach (var (field, expected) in new (string, string)[]
+        // Spond may switch autoReminderType to DISABLED once the 48h reminder has fired (or an owner turns it off).
+        // Reminder type is not part of the diff and updates forward the current value, so both are accepted as-is.
+        foreach (var (field, allowed) in new (string, string[])[]
         {
-            ("type", "EVENT"), ("visibility", "INVITEES"), ("autoReminderType", "REMIND_48H_BEFORE"),
-            ("commentsDisabled", "true"), ("participantsHidden", "true"),
+            ("type", ["EVENT"]), ("visibility", ["INVITEES"]), ("autoReminderType", ["REMIND_48H_BEFORE", "DISABLED"]),
+            ("commentsDisabled", ["true"]), ("participantsHidden", ["true"]),
         })
         {
             var actual = SettingValue(item, field);
-            if (actual != expected) unexpected.Add($"{field}={actual}");
+            if (!allowed.Contains(actual, StringComparer.Ordinal)) unexpected.Add($"{field}={actual}");
         }
         if (unexpected.Count > 0)
             throw new SyncException(
