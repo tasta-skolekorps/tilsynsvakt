@@ -17,6 +17,14 @@ public sealed class SyncPlannerTests
         Assert.Equal(PilotDate, SyncPlanner.OwnedDate("Informasjon\r\n" + SyncPlanner.Marker(PilotDate)));
     }
 
+    [Theory]
+    [InlineData("Informasjon\n[tilsynsvakt-sync:2026-11-26]")]
+    [InlineData("Informasjon\n\n[tilsynsvakt-sync:2026-11-26]")]
+    [InlineData("Informasjon\r\n\r\n  [tilsynsvakt-sync:2026-11-26] \t\n")]
+    [InlineData(" [tilsynsvakt-sync:2026-11-26]")]
+    public void OwnedDate_ToleratesBlankLinesAndSurroundingWhitespace(string description) =>
+        Assert.Equal(PilotDate, SyncPlanner.OwnedDate(description));
+
     [Fact]
     public void Plan_ManualEventOnTakenDate_SkipsWithoutCreate()
     {
@@ -48,15 +56,55 @@ public sealed class SyncPlannerTests
     }
 
     [Fact]
-    public void Plan_UnchangedVerifiedEvent_IsIdempotent()
+    public void Plan_UnchangedVerifiedEvent_IsRewrittenEveryRun()
     {
         var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
         var existing = new ExistingEvent("test-event", desired.Description, desired);
 
-        var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [existing],
-            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [existing],
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
-        Assert.Empty(actions);
+        Assert.Equal(SyncActionKind.Update, action.Kind);
+        Assert.Equal("test-event", action.EventId);
+        Assert.True(SyncPlanner.Equivalent(action.Desired, desired));
+        Assert.True(SyncPlanner.Equivalent(action.PriorState, desired));
+        Assert.Empty(SyncReport.ChangedFields(action.PriorState, action.Desired));
+    }
+
+    [Fact]
+    public void Plan_ChangedTimeAndLocationUpdateInPlace()
+    {
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
+        var state = desired with
+        {
+            Meet = desired.Meet.AddMinutes(30), Start = desired.Start.AddMinutes(30), End = desired.End.AddMinutes(-30),
+            Location = "Gammelt sted"
+        };
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", state.Description, state)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+        Assert.Equal(SyncActionKind.Update, action.Kind);
+        Assert.True(SyncPlanner.Equivalent(action.Desired, desired));
+        Assert.Equal(new[] { "sted", "oppmøte", "tidspunkt" }, SyncReport.ChangedFields(state, desired));
+    }
+
+    [Fact]
+    public void Plan_UnsupportedSettingChangeFailsClosed()
+    {
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
+        var state = desired with { AutoAccept = true };
+        Assert.Throws<SyncException>(() => SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", state.Description, state)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+    }
+
+    [Fact]
+    public void Plan_LegacySingleNewlineMarkerIsStillOwned()
+    {
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
+        var legacy = desired with { Description = SyncPlanner.Description("gammelt-test-passord") + "\n" + SyncPlanner.Marker(PilotDate) };
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", legacy.Description, legacy)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+        Assert.Equal(SyncActionKind.Update, action.Kind);
+        Assert.EndsWith("\n\n" + SyncPlanner.Marker(PilotDate), action.Desired!.Description);
     }
 
     [Fact]
@@ -80,7 +128,7 @@ public sealed class SyncPlannerTests
         Assert.False(desired.AutoAccept);
         Assert.Equal("Tilsynsvakt Tasta Skole", desired.Heading);
         Assert.Equal("Tasta skole, Randabergveien, Stavanger", desired.Location);
-        Assert.Equal("Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: test-passord), evt. ta kontakt på 924 23 946 hvis sp\u00f8rsm\u00e5l. God vakt!\n[tilsynsvakt-sync:2026-11-26]", desired.Description);
+        Assert.Equal("Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: test-passord) (der kan du bytte vakten din selv og fylle ut sjekklisten i stedet for skjema i perm), evt. ta kontakt på 924 23 946 hvis sp\u00f8rsm\u00e5l. God vakt!\n\n[tilsynsvakt-sync:2026-11-26]", desired.Description);
         Assert.Equal(PilotDate, SyncPlanner.OwnedDate(desired.Description));
     }
 
@@ -147,14 +195,15 @@ public sealed class SyncPlannerTests
     }
 
     [Fact]
-    public void Plan_ReorderedGuardianIdsAreUnchanged()
+    public void Plan_ReorderedGuardianIdsUpdateInPlace()
     {
         var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
         var state = desired with { GuardianIds = new[] { "test-parent-b", "test-parent-a" } };
 
-        Assert.Empty(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", state.Description, state)], Group,
             new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+        Assert.Equal(SyncActionKind.Update, action.Kind);
     }
 
     [Fact]
@@ -364,13 +413,14 @@ public sealed class SyncPlannerTests
     }
 
     [Fact]
-    public void Plan_PartialProfilesSecondRunMakesNoChanges()
+    public void Plan_PartialProfilesSecondRunWarnsAndRewrites()
     {
         var state = SyncPlanner.DesiredEvent(PilotDate, PartialGroup, ["test-parent-a"], TestData.SitePassword);
-        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
-            [new("test-event", state.Description, state)], PartialGroup, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
-        Assert.Equal(SyncActionKind.WarnMissingProfiles, action.Kind);
-        Assert.Null(action.EventId);
+        var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", state.Description, state)], PartialGroup, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
+        Assert.Equal(new[] { SyncActionKind.WarnMissingProfiles, SyncActionKind.Update }, actions.Select(action => action.Kind));
+        Assert.Null(actions[0].EventId);
+        Assert.Equal("test-event", actions[1].EventId);
     }
 
     [Fact]
@@ -425,7 +475,6 @@ public sealed class SyncPlannerTests
     [InlineData("[tilsynsvakt-sync:2026-02-30]")]
     [InlineData("[tilsynsvakt-sync:2026-11-26] suffix")]
     [InlineData("prefix [tilsynsvakt-sync:2026-11-26]")]
-    [InlineData(" [tilsynsvakt-sync:2026-11-26]")]
     [InlineData("[tilsynsvakt-sync:26.11.2026]")]
     public void OwnedDate_NonExactMarkerDoesNotGrantOwnership(string? description) =>
         Assert.Null(SyncPlanner.OwnedDate(description));

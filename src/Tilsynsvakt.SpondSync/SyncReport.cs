@@ -77,7 +77,12 @@ public static class SyncReport
         var name = PublicName(outcome.GuardName);
         if (outcome.Warning == SyncActionKind.WarnMissingProfiles)
             yield return $"::warning::{date} én eller flere foresatte mangler Spond-profil og ble ikke invitert{name}";
-        var fields = outcome.ChangedFields is { Count: > 0 } changed ? $" ({string.Join(", ", changed)})" : "";
+        var fields = outcome.ChangedFields switch
+        {
+            { Count: > 0 } changed => $" ({string.Join(", ", changed)})",
+            { Count: 0 } => " (ingen endringer)",
+            _ => ""
+        };
         var label = outcome.Kind switch
         {
             DateOutcomeKind.Create => dryRun ? "vil opprette" : "opprettet",

@@ -63,26 +63,26 @@ public sealed class SyncReportTests
     public void DryRun_OneLinePerDateAndSummary() => Assert.Equal(new[]
     {
         "2026-11-17 vil opprette – Kari Test",
-        "2026-11-18 uendret – Kari Test",
+        "2026-11-18 vil oppdatere (ingen endringer) – Kari Test",
         "2026-11-19 ingen vakt",
         "2026-11-20 vil slette",
         "2026-11-21 vil oppdatere (tittel) – Kari Test",
         "2026-11-22 vil erstatte (ny vakt) – Kari Test",
         "::warning::2026-11-23 telefonnummeret (slutter på 09) finnes ikke hos noen foresatt i undergruppen; nummeret finnes ikke i Spond-gruppen – sjekk nummeret i vaktlisten og i Spond; vakt hoppet over – Ola Test",
-        "Oppsummering: vil opprette 1, vil oppdatere 2, vil slette 1, 1 uendret, 1 hoppet over"
+        "Oppsummering: vil opprette 1, vil oppdatere 3, vil slette 1, 0 uendret, 1 hoppet over"
     }, Render(true));
 
     [Fact]
     public void RealRun_UsesPerformedWording() => Assert.Equal(new[]
     {
         "2026-11-17 opprettet – Kari Test",
-        "2026-11-18 uendret – Kari Test",
+        "2026-11-18 oppdatert (ingen endringer) – Kari Test",
         "2026-11-19 ingen vakt",
         "2026-11-20 slettet",
         "2026-11-21 oppdatert (tittel) – Kari Test",
         "2026-11-22 erstattet – Kari Test",
         "::warning::2026-11-23 telefonnummeret (slutter på 09) finnes ikke hos noen foresatt i undergruppen; nummeret finnes ikke i Spond-gruppen – sjekk nummeret i vaktlisten og i Spond; vakt hoppet over – Ola Test",
-        "Oppsummering: 1 opprettet, 2 oppdatert, 1 slettet, 1 uendret, 1 hoppet over"
+        "Oppsummering: 1 opprettet, 3 oppdatert, 1 slettet, 0 uendret, 1 hoppet over"
     }, Render(false));
 
     [Fact]
@@ -110,7 +110,10 @@ public sealed class SyncReportTests
         log.Start();
         Assert.Empty(lines);
         log.Reported(actions[0]);
-        Assert.Equal(new[] { "2026-11-17 opprettet – Kari Test", "2026-11-18 uendret – Kari Test", "2026-11-19 ingen vakt" }, lines);
+        Assert.Equal(new[] { "2026-11-17 opprettet – Kari Test" }, lines);
+        log.Reported(actions[1]);
+        Assert.Equal(new[] { "2026-11-17 opprettet – Kari Test", "2026-11-18 oppdatert (ingen endringer) – Kari Test",
+            "2026-11-19 ingen vakt" }, lines);
     }
 
     [Fact]
