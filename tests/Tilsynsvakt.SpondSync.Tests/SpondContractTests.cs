@@ -713,6 +713,37 @@ public sealed class SpondContractTests
         Assert.Contains("ingen endringer sendt", error.Message);
     }
 
+    [Theory]
+    [InlineData("REMIND_48H_BEFORE")]
+    [InlineData("DISABLED")]
+    public void ReadState_AcceptsOwnReminderOrDisabledReminder(string reminder)
+    {
+        var state = WithFields(EventJson(), ("autoReminderType", reminder));
+        var spec = SpondClient.ReadState(state);
+        Assert.NotNull(spec);
+        Assert.Equivalent(SpondClient.ReadState(EventJson()), spec, strict: true);
+    }
+
+    [Theory]
+    [InlineData("REMIND_72H_BEFORE")]
+    [InlineData("REMIND_24H_BEFORE")]
+    [InlineData("SOMETHING_ELSE")]
+    public void ReadState_UnknownReminderIsStillRejected(string reminder)
+    {
+        var state = WithFields(EventJson(), ("autoReminderType", reminder));
+        var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(state));
+        Assert.Contains($"autoReminderType={reminder}", error.Message);
+        Assert.Contains("ingen endringer sendt", error.Message);
+    }
+
+    [Fact]
+    public void Metadata_PreservesDisabledReminderInsteadOfRestoringIt()
+    {
+        var state = WithFields(EventJson(), ("autoReminderType", "DISABLED"));
+        var payload = SpondPayloads.Metadata(state, Desired with { Heading = "Test" });
+        Assert.Equal("DISABLED", payload.GetProperty("autoReminderType").GetString());
+    }
+
     [Fact]
     public void ReadState_MissingSettingIsReportedAsUnexpected()
     {
