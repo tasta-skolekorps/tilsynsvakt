@@ -7,9 +7,10 @@ public sealed record RosterShift(DateOnly Date, string Status, Guard? Guard);
 public sealed record Guardian(string Id, string? PhoneNumber, string? ProfileId = null, string? Email = null);
 public sealed record ChildMember(string Id, IReadOnlyList<string> SubGroups, IReadOnlyList<Guardian> Guardians);
 public sealed record TargetGroup(string Id, string SubgroupId, IReadOnlyList<ChildMember> Members);
+// InviteAt is null when Spond omits inviteTime on readback, which means invitations were already sent.
 public sealed record EventSpec(
     string Heading, string Description, string Location, DateTimeOffset Meet,
-    DateTimeOffset Start, DateTimeOffset End, DateTimeOffset InviteAt,
+    DateTimeOffset Start, DateTimeOffset End, DateTimeOffset? InviteAt,
     string GroupId, string SubgroupId, IReadOnlyList<string> GuardianIds, bool AutoAccept = false);
 public sealed record ExistingEvent(string Id, string? Description, EventSpec? VerifiedState);
 public sealed record EventListing(IReadOnlyList<ExistingEvent> Owned, IReadOnlySet<DateOnly> ManualDates);
@@ -187,6 +188,6 @@ public static class SyncPlanner
     }
 
     internal static bool Equivalent(EventSpec? current, EventSpec desired) => current is not null &&
-        current with { GuardianIds = desired.GuardianIds } == desired &&
+        current with { GuardianIds = desired.GuardianIds, InviteAt = current.InviteAt ?? desired.InviteAt } == desired &&
         current.GuardianIds.Order(StringComparer.Ordinal).SequenceEqual(desired.GuardianIds, StringComparer.Ordinal);
 }

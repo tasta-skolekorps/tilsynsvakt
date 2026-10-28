@@ -57,7 +57,7 @@ public static class SyncReport
         if (prior.Location != desired.Location) fields.Add("sted");
         if (prior.Meet != desired.Meet) fields.Add("oppmøte");
         if (prior.Start != desired.Start || prior.End != desired.End) fields.Add("tidspunkt");
-        if (prior.InviteAt != desired.InviteAt) fields.Add("invitasjon");
+        if (prior.InviteAt is not null && prior.InviteAt != desired.InviteAt) fields.Add("invitasjon");
         if (prior.GroupId != desired.GroupId || prior.SubgroupId != desired.SubgroupId) fields.Add("gruppe");
         if (prior.AutoAccept != desired.AutoAccept) fields.Add("autoaksept");
         if (!prior.GuardianIds.Order(StringComparer.Ordinal)

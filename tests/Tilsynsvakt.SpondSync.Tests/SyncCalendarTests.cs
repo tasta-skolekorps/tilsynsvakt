@@ -19,7 +19,7 @@ public sealed class SyncCalendarTests
         Assert.Equal(Parse(end), desired.End);
         Assert.Equal(Parse(invite), desired.InviteAt);
         Assert.Equal(TimeSpan.Zero, desired.Start.Offset);
-        var invitation = TimeZoneInfo.ConvertTime(desired.InviteAt, SyncCalendar.Oslo);
+        var invitation = TimeZoneInfo.ConvertTime(desired.InviteAt!.Value, SyncCalendar.Oslo);
         Assert.Equal(day.AddDays(-7), DateOnly.FromDateTime(invitation.DateTime));
         Assert.Equal(new TimeOnly(16, 45), TimeOnly.FromDateTime(invitation.DateTime));
     }
