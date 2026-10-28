@@ -687,4 +687,15 @@ public sealed class SpondContractTests
         var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(JsonSerializer.SerializeToElement(fields)));
         Assert.Contains("autoReminderType=mangler", error.Message);
     }
+
+    [Fact]
+    public void ReadState_MissingFieldNamesEvent()
+    {
+        var fields = EventJson().EnumerateObject().Where(property => property.Name != "inviteTime")
+            .ToDictionary(property => property.Name, property => property.Value.Clone());
+        var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(JsonSerializer.SerializeToElement(fields)));
+        Assert.Contains("mangler felt «inviteTime»", error.Message);
+        Assert.Contains("(id test-event)", error.Message);
+        Assert.Contains("ingen endringer sendt", error.Message);
+    }
 }
