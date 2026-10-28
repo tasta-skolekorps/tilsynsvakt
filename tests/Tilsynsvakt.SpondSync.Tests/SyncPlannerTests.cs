@@ -21,7 +21,7 @@ public sealed class SyncPlannerTests
     public void Plan_ManualEventOnTakenDate_SkipsWithoutCreate()
     {
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [], Group,
-            new HashSet<DateOnly> { PilotDate }, Today, new HashSet<DateOnly> { PilotDate }));
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword, new HashSet<DateOnly> { PilotDate }));
         Assert.Equal(new SyncAction(PilotDate, SyncActionKind.SkipManualEvent, TestGuard.Name, null, null), action);
     }
 
@@ -30,9 +30,9 @@ public sealed class SyncPlannerTests
     [InlineData("open")]
     public void Plan_ManualAndOwnedOnSameDate_SkipsWithoutDelete(string status)
     {
-        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-other-profile"]);
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-other-profile"], TestData.SitePassword);
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, status, status == "taken" ? TestGuard : null)],
-            [new("test-event", desired.Description, desired)], Group, new HashSet<DateOnly> { PilotDate }, Today,
+            [new("test-event", desired.Description, desired)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword,
             new HashSet<DateOnly> { PilotDate }));
         Assert.Equal(SyncActionKind.SkipManualEvent, action.Kind);
         Assert.Null(action.EventId);
@@ -41,7 +41,7 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_ManualEventWithoutShift_SkipsWithoutName()
     {
-        var action = Assert.Single(SyncPlanner.Plan([], [], Group, new HashSet<DateOnly> { PilotDate }, Today,
+        var action = Assert.Single(SyncPlanner.Plan([], [], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword,
             new HashSet<DateOnly> { PilotDate }));
         Assert.Equal(SyncActionKind.SkipManualEvent, action.Kind);
         Assert.Null(action.GuardName);
@@ -50,11 +50,11 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_UnchangedVerifiedEvent_IsIdempotent()
     {
-        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"]);
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
         var existing = new ExistingEvent("test-event", desired.Description, desired);
 
         var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [existing],
-            Group, new HashSet<DateOnly> { PilotDate }, Today);
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
 
         Assert.Empty(actions);
     }
@@ -65,7 +65,7 @@ public sealed class SyncPlannerTests
         var openDate = PilotDate.AddDays(-1);
         var action = Assert.Single(SyncPlanner.Plan(
             [new(PilotDate, "taken", TestGuard), new(openDate, "open", null)], [], Group,
-            new HashSet<DateOnly> { PilotDate, openDate }, Today));
+            new HashSet<DateOnly> { PilotDate, openDate }, Today, TestData.SitePassword));
 
         Assert.Equal(SyncActionKind.Create, action.Kind);
         Assert.Equal(PilotDate, action.Date);
@@ -80,7 +80,39 @@ public sealed class SyncPlannerTests
         Assert.False(desired.AutoAccept);
         Assert.Equal("Tilsynsvakt Tasta Skole", desired.Heading);
         Assert.Equal("Tasta skole, Randabergveien, Stavanger", desired.Location);
-        Assert.Equal("Se nettside https://tasta-skolekorps.github.io/tilsynsvakt/ for informasjon, evt. ta kontakt på 924 23 946 hvis sp\u00f8rsm\u00e5l. God vakt!\n[tilsynsvakt-sync:2026-11-26]", desired.Description);
+        Assert.Equal("Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: test-passord), evt. ta kontakt på 924 23 946 hvis sp\u00f8rsm\u00e5l. God vakt!\n[tilsynsvakt-sync:2026-11-26]", desired.Description);
+        Assert.Equal(PilotDate, SyncPlanner.OwnedDate(desired.Description));
+    }
+
+    [Fact]
+    public void DesiredEvent_IncludesInjectedSitePassword()
+    {
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a"], "annet-test-passord");
+        Assert.Contains("(passord: annet-test-passord)", desired.Description);
+        Assert.Contains("https://tilsynsvakt.tastaskolekorps.no", desired.Description);
+        Assert.Equal(PilotDate, SyncPlanner.OwnedDate(desired.Description));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("test\npassord")]
+    [InlineData("test\rpassord")]
+    public void Plan_InvalidSitePassword_FailsWithoutLeakingIt(string password)
+    {
+        var exception = Assert.Throws<SyncException>(() => SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [], Group,
+            new HashSet<DateOnly> { PilotDate }, Today, password));
+        if (password.Trim().Length > 0) Assert.DoesNotContain(password, exception.Message);
+    }
+
+    [Fact]
+    public void Plan_ChangedSitePassword_UpdatesOnlyDescription()
+    {
+        var prior = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], "gammelt-test-passord");
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
+            [new("test-event", prior.Description, prior)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+        Assert.Equal(SyncActionKind.Update, action.Kind);
+        Assert.Contains("(passord: test-passord)", action.Desired!.Description);
     }
 
     [Fact]
@@ -88,7 +120,7 @@ public sealed class SyncPlannerTests
     {
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "open", null)],
             [new("test-owned", SyncPlanner.Marker(PilotDate), null), new("test-unowned", "Informasjon", null)],
-            Group, new HashSet<DateOnly> { PilotDate }, Today));
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
         Assert.Equal(SyncActionKind.Delete, action.Kind);
         Assert.Equal("test-owned", action.EventId);
@@ -99,10 +131,10 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_ChangedGuardiansDeletesThenCreates()
     {
-        var oldState = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-previous-parent"]);
+        var oldState = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-previous-parent"], TestData.SitePassword);
         var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", oldState.Description, oldState)], Group,
-            new HashSet<DateOnly> { PilotDate }, Today);
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
 
         Assert.Equal(2, actions.Count);
         Assert.Equal(SyncActionKind.Delete, actions[0].Kind);
@@ -117,12 +149,12 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_ReorderedGuardianIdsAreUnchanged()
     {
-        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"]);
+        var desired = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword);
         var state = desired with { GuardianIds = new[] { "test-parent-b", "test-parent-a" } };
 
         Assert.Empty(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", state.Description, state)], Group,
-            new HashSet<DateOnly> { PilotDate }, Today));
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
     }
 
     [Fact]
@@ -130,7 +162,7 @@ public sealed class SyncPlannerTests
     {
         Assert.Throws<SyncException>(() => SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", SyncPlanner.Marker(PilotDate), null)], Group,
-            new HashSet<DateOnly> { PilotDate }, Today));
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
     }
 
     [Theory]
@@ -139,7 +171,7 @@ public sealed class SyncPlannerTests
     public void Plan_UnmarkedEventsAreNeverUpdateOrDeleteTargets(string status)
     {
         var actions = SyncPlanner.Plan([new(PilotDate, status, status == "taken" ? TestGuard : null)],
-            [new("test-unowned", "Informasjon", null)], Group, new HashSet<DateOnly> { PilotDate }, Today);
+            [new("test-unowned", "Informasjon", null)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
 
         Assert.All(actions, action => Assert.Equal(SyncActionKind.Create, action.Kind));
         Assert.All(actions, action => Assert.Null(action.EventId));
@@ -154,7 +186,7 @@ public sealed class SyncPlannerTests
         var past = Today.AddDays(-1);
         Assert.Empty(SyncPlanner.Plan([new(past, status, status == "taken" ? TestGuard : null)],
             [new("test-past", SyncPlanner.Marker(past), null)], Group,
-            new HashSet<DateOnly> { past }, Today));
+            new HashSet<DateOnly> { past }, Today, TestData.SitePassword));
     }
 
     [Theory]
@@ -166,7 +198,7 @@ public sealed class SyncPlannerTests
         ExistingEvent[] existing = hasExisting ? [new("test-event", SyncPlanner.Marker(PilotDate), null)] : [];
 
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
-            existing, unmatchedGroup, new HashSet<DateOnly> { PilotDate }, Today));
+            existing, unmatchedGroup, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
         Assert.Equal(SyncActionKind.SkipPhoneNotFound, action.Kind);
         Assert.Equal("Familien Test", action.GuardName);
@@ -192,7 +224,7 @@ public sealed class SyncPlannerTests
         var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard), new(laterDate, "open", null)],
             [new("test-later-event", SyncPlanner.Marker(laterDate), null)],
             Group with { Members = System.Array.Empty<ChildMember>() },
-            new HashSet<DateOnly> { PilotDate, laterDate }, Today);
+            new HashSet<DateOnly> { PilotDate, laterDate }, Today, TestData.SitePassword);
 
         Assert.Collection(actions,
             action =>
@@ -271,7 +303,7 @@ public sealed class SyncPlannerTests
     public void Plan_PartialProfilesInvitesProfiledGuardiansAndWarns()
     {
         var actions = SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)], [], PartialGroup,
-            new HashSet<DateOnly> { PilotDate }, Today);
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword);
 
         Assert.Collection(actions,
             action =>
@@ -290,9 +322,9 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_PartialProfilesSecondRunMakesNoChanges()
     {
-        var state = SyncPlanner.DesiredEvent(PilotDate, PartialGroup, ["test-parent-a"]);
+        var state = SyncPlanner.DesiredEvent(PilotDate, PartialGroup, ["test-parent-a"], TestData.SitePassword);
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
-            [new("test-event", state.Description, state)], PartialGroup, new HashSet<DateOnly> { PilotDate }, Today));
+            [new("test-event", state.Description, state)], PartialGroup, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
         Assert.Equal(SyncActionKind.WarnMissingProfiles, action.Kind);
         Assert.Null(action.EventId);
     }
@@ -304,7 +336,7 @@ public sealed class SyncPlannerTests
         Assert.Equal(GuardianMatchOutcome.NoProfiles, SyncPlanner.MatchGuardians(TestGuard, Group with { Members = [child] }).Outcome);
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event", SyncPlanner.Marker(PilotDate), null)], Group with { Members = [child] },
-            new HashSet<DateOnly> { PilotDate }, Today));
+            new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
         Assert.Equal(SyncActionKind.SkipNoProfiles, action.Kind);
         Assert.Equal("Familien Test", action.GuardName);
         Assert.Null(action.EventId);
@@ -313,28 +345,28 @@ public sealed class SyncPlannerTests
     [Fact]
     public void Plan_MetadataOnlyChangeDoesNotReplaceGuardians()
     {
-        var state = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"]) with { Heading = "Test" };
+        var state = SyncPlanner.DesiredEvent(PilotDate, Group, ["test-parent-a", "test-parent-b"], TestData.SitePassword) with { Heading = "Test" };
         var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
-            [new("test-event", state.Description, state)], Group, new HashSet<DateOnly> { PilotDate }, Today));
+            [new("test-event", state.Description, state)], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
         Assert.Equal(SyncActionKind.Update, action.Kind);
     }
 
     [Fact]
     public void Plan_MissingRosterRowCannotDeleteOwnedEvent() =>
         Assert.Throws<SyncException>(() => SyncPlanner.Plan([], [new("test-event", SyncPlanner.Marker(PilotDate), null)],
-            Group, new HashSet<DateOnly> { PilotDate }, Today));
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
     [Fact]
     public void Plan_DuplicateRosterDatesFailClosed() =>
         Assert.Throws<SyncException>(() => SyncPlanner.Plan(
             [new(PilotDate, "taken", TestGuard), new(PilotDate, "open", null)], [],
-            Group, new HashSet<DateOnly> { PilotDate }, Today));
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
     [Fact]
     public void Plan_DuplicateOwnedEventsFailClosed() =>
         Assert.Throws<SyncException>(() => SyncPlanner.Plan([new(PilotDate, "taken", TestGuard)],
             [new("test-event-a", SyncPlanner.Marker(PilotDate), null), new("test-event-b", SyncPlanner.Marker(PilotDate), null)],
-            Group, new HashSet<DateOnly> { PilotDate }, Today));
+            Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
     [Theory]
     [InlineData("open", true)]
@@ -342,7 +374,7 @@ public sealed class SyncPlannerTests
     [InlineData("unknown", true)]
     public void Plan_InconsistentRosterFailsClosed(string status, bool hasGuard) =>
         Assert.Throws<SyncException>(() => SyncPlanner.Plan([new(PilotDate, status, hasGuard ? TestGuard : null)],
-            [], Group, new HashSet<DateOnly> { PilotDate }, Today));
+            [], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
 
     [Theory]
     [InlineData(null)]

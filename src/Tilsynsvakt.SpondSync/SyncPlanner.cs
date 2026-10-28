@@ -55,7 +55,15 @@ public static class SyncPlanner
 {
     public const string Heading = "Tilsynsvakt Tasta Skole";
     public const string Location = "Tasta skole, Randabergveien, Stavanger";
-    public const string Description = "Se nettside https://tasta-skolekorps.github.io/tilsynsvakt/ for informasjon, evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!";
+    public const string WebsiteUrl = "https://tilsynsvakt.tastaskolekorps.no";
+
+    // The shared site password is injected at runtime (API_PASSWORD) because Spond events are members-only.
+    public static string Description(string sitePassword)
+    {
+        if (string.IsNullOrWhiteSpace(sitePassword) || sitePassword.AsSpan().IndexOfAny('\r', '\n') >= 0)
+            throw new SyncException("Nettsidepassordet kan ikke brukes i arrangementsbeskrivelsen (tomt eller inneholder linjeskift).");
+        return $"Se nettside {WebsiteUrl} for informasjon (passord: {sitePassword}), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!";
+    }
 
     public static string Marker(DateOnly date) => $"[tilsynsvakt-sync:{date:yyyy-MM-dd}]";
 
@@ -105,16 +113,18 @@ public static class SyncPlanner
             : new(GuardianMatchOutcome.Matched, ids, missing);
     }
 
-    public static EventSpec DesiredEvent(DateOnly date, TargetGroup group, IReadOnlyList<string> guardianIds) =>
-        new(Heading, Description + "\n" + Marker(date), Location,
+    public static EventSpec DesiredEvent(DateOnly date, TargetGroup group, IReadOnlyList<string> guardianIds, string sitePassword) =>
+        new(Heading, Description(sitePassword) + "\n" + Marker(date), Location,
             SyncCalendar.At(date, new TimeOnly(16, 40)), SyncCalendar.At(date, new TimeOnly(16, 45)),
             SyncCalendar.At(date, new TimeOnly(22, 0)), SyncCalendar.At(date.AddDays(-7), new TimeOnly(16, 45)),
             group.Id, group.SubgroupId, guardianIds.Order(StringComparer.Ordinal).ToArray());
 
     public static IReadOnlyList<SyncAction> Plan(
         IReadOnlyList<RosterShift> roster, IReadOnlyList<ExistingEvent> existing,
-        TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today, IReadOnlySet<DateOnly>? manualDates = null)
+        TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today, string sitePassword,
+        IReadOnlySet<DateOnly>? manualDates = null)
     {
+        _ = Description(sitePassword);
         var selected = dates.Where(date => date >= today).ToHashSet();
         var shifts = roster.Where(shift => selected.Contains(shift.Date)).ToArray();
         if (shifts.GroupBy(shift => shift.Date).Any(bucket => bucket.Count() != 1))
@@ -153,7 +163,7 @@ public static class SyncPlanner
             }
             if (match.MissingProfiles)
                 actions.Add(new(date, SyncActionKind.WarnMissingProfiles, shift.Guard.Name, null, null));
-            var desired = DesiredEvent(date, group, match.ProfileIds);
+            var desired = DesiredEvent(date, group, match.ProfileIds, sitePassword);
             if (current is null)
                 actions.Add(new(date, SyncActionKind.Create, shift.Guard.Name, null, desired));
             else if (current.VerifiedState is null)

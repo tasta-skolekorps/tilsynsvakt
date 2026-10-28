@@ -11,7 +11,7 @@ public sealed class SyncReportTests
     private static readonly Guard Kari = new(1, "Kari Test", "+4790000001");
     private static readonly Guard Ola = new(2, "Ola Test", "+4790000009");
     private static DateOnly D(int day) => new(2026, 11, day);
-    private static EventSpec Spec(int day) => SyncPlanner.DesiredEvent(D(day), Group, ["test-profile"]);
+    private static EventSpec Spec(int day) => SyncPlanner.DesiredEvent(D(day), Group, ["test-profile"], TestData.SitePassword);
 
     private static (IReadOnlyList<SyncAction> Actions, IReadOnlyList<DateOutcome> Outcomes) Scenario()
     {
@@ -24,7 +24,7 @@ public sealed class SyncReportTests
             new("test-e21", Spec(21).Description, Spec(21) with { Heading = "Old" }),
             new("test-e22", Spec(22).Description, Spec(22) with { GuardianIds = ["test-old-a", "test-old-b"] })];
         var dates = Enumerable.Range(17, 7).Select(D).ToHashSet();
-        var actions = SyncPlanner.Plan(roster, existing, Group, dates, Today);
+        var actions = SyncPlanner.Plan(roster, existing, Group, dates, Today, TestData.SitePassword);
         return (actions, SyncReport.Outcomes(actions, roster, dates, Today));
     }
 
@@ -142,7 +142,7 @@ public sealed class SyncReportTests
     {
         RosterShift[] roster = [new(D(17), "taken", Kari), new(D(18), "open", null), new(D(19), "taken", Kari)];
         var dates = new HashSet<DateOnly> { D(17), D(18), D(19) };
-        var actions = SyncPlanner.Plan(roster, [], Group, dates, Today, new HashSet<DateOnly> { D(17), D(18) });
+        var actions = SyncPlanner.Plan(roster, [], Group, dates, Today, TestData.SitePassword, new HashSet<DateOnly> { D(17), D(18) });
         var lines = new List<string>();
         var log = new SyncLog(SyncReport.Outcomes(actions, roster, dates, Today), true, lines.Add);
         log.Start();

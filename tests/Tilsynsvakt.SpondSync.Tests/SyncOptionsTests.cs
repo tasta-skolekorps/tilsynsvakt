@@ -61,7 +61,7 @@ public sealed class SyncOptionsTests
             [new ChildMember("test-child", ["test-subgroup"], [new Guardian("test-parent", "+4790000001", "test-parent")])]);
         var actions = SyncPlanner.Plan(
             [new(pilot, status, status == "taken" ? guard : null), new(pilot.AddDays(-1), "taken", guard)],
-            [new("test-outside", SyncPlanner.Marker(pilot.AddDays(-1)), null)], group, dates, today);
+            [new("test-outside", SyncPlanner.Marker(pilot.AddDays(-1)), null)], group, dates, today, TestData.SitePassword);
 
         Assert.Equal(expectedCount, actions.Count);
         Assert.All(actions, action => Assert.Equal(pilot, action.Date));
