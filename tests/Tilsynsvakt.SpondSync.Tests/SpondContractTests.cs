@@ -616,7 +616,16 @@ public sealed class SpondContractTests
     {
         var state = WithFields(EventJson(), ("commentsDisabled", false), ("visibility", "ALL"));
         var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(state));
-        Assert.Contains("visibility, commentsDisabled", error.Message);
+        Assert.Contains("visibility=ALL, commentsDisabled=false", error.Message);
         Assert.Contains("ingen endringer sendt", error.Message);
+    }
+
+    [Fact]
+    public void ReadState_MissingSettingIsReportedAsUnexpected()
+    {
+        var fields = EventJson().EnumerateObject().Where(property => property.Name != "autoReminderType")
+            .ToDictionary(property => property.Name, property => property.Value.Clone());
+        var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(JsonSerializer.SerializeToElement(fields)));
+        Assert.Contains("autoReminderType=mangler", error.Message);
     }
 }

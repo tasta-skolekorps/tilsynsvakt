@@ -127,12 +127,17 @@ public sealed class SpondClient(HttpClient http)
         var start = Instant(item, "startTimestamp");
         var meet = item.TryGetProperty("meetupTimestamp", out var meetup) && meetup.ValueKind == JsonValueKind.String
             ? Instant(item, "meetupTimestamp") : start.AddMinutes(-Property(item, "meetupPrior").GetDouble());
+        // Settings are compared leniently so a missing or mistyped field is reported by name instead of aborting the parse.
         var unexpected = new List<string>();
-        if (Text(item, "type") != "EVENT") unexpected.Add("type");
-        if (Text(item, "visibility") != "INVITEES") unexpected.Add("visibility");
-        if (Text(item, "autoReminderType") != "REMIND_48H_BEFORE") unexpected.Add("autoReminderType");
-        if (!Property(item, "commentsDisabled").GetBoolean()) unexpected.Add("commentsDisabled");
-        if (!Property(item, "participantsHidden").GetBoolean()) unexpected.Add("participantsHidden");
+        foreach (var (field, expected) in new (string, string)[]
+        {
+            ("type", "EVENT"), ("visibility", "INVITEES"), ("autoReminderType", "REMIND_48H_BEFORE"),
+            ("commentsDisabled", "true"), ("participantsHidden", "true"),
+        })
+        {
+            var actual = SettingValue(item, field);
+            if (actual != expected) unexpected.Add($"{field}={actual}");
+        }
         if (unexpected.Count > 0)
             throw new SyncException(
                 $"Uventede innstillinger i eid arrangement {SyncCalendar.Today(start):dd.MM.yyyy} " +
@@ -142,6 +147,16 @@ public sealed class SpondClient(HttpClient http)
             guardians.Select(guardian => Text(guardian, "profileId")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             Property(item, "autoAccept").GetBoolean());
     }
+
+    private static string SettingValue(JsonElement item, string field) =>
+        !item.TryGetProperty(field, out var value) ? "mangler" : value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() is { Length: > 0 and <= 40 } text ? text : "ugyldig",
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => "null",
+            _ => "ugyldig",
+        };
 
     public async Task<string> GetOwnerProfileIdAsync(CancellationToken cancellationToken = default)
     {
