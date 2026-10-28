@@ -22,8 +22,12 @@ public sealed class SafeHelpersTests
     {
         using var document = JsonDocument.Parse("{\"name\":\"Familien Test\",\"id\":\"test-parent\",\"phoneNumber\":\"+4790000001\",\"empty\":\"\"}");
         var root = document.RootElement;
-        Assert.Equal("Ufullstendig ekstern respons.", Assert.Throws<SyncException>(() => SpondClient.Property(root, "missing")).Message);
-        Assert.Equal("Ufullstendig ekstern respons.", Assert.Throws<SyncException>(() => SpondClient.Text(root, "empty")).Message);
+        Assert.Equal("Ufullstendig ekstern respons (mangler felt «missing»).", Assert.Throws<SyncException>(() => SpondClient.Property(root, "missing")).Message);
+        Assert.Equal("Ufullstendig ekstern respons (mangler felt «empty»).", Assert.Throws<SyncException>(() => SpondClient.Text(root, "empty")).Message);
+        var error = Assert.Throws<SyncException>(() => SpondClient.Text(root, "attachments")).Message;
+        Assert.Equal("Ufullstendig ekstern respons (mangler felt «attachments»).", error);
+        foreach (var privateValue in new[] { "test-parent", "Familien Test", "+4790000001" })
+            Assert.DoesNotContain(privateValue, error);
         Assert.Equal("Uventet format i ekstern respons.", Assert.Throws<SyncException>(() => SpondClient.Array(root)).Message);
     }
 
