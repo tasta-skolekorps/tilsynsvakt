@@ -35,7 +35,7 @@ try
     await spond.LoginAsync(options.Username, options.Password, timeout.Token);
     var group = await spond.GetTargetGroupAsync(options.GroupName, options.SubgroupName, timeout.Token);
     var existing = await spond.GetEventsAsync(group.Id, dates, timeout.Token);
-    var actions = SyncPlanner.Plan(roster, existing.Owned, group, dates, today, existing.ManualDates);
+    var actions = SyncPlanner.Plan(roster, existing.Owned, group, dates, today, options.ApiPassword, existing.ManualDates);
     var log = new SyncLog(SyncReport.Outcomes(actions, roster, dates, today), options.DryRun, Console.WriteLine);
     log.Start();
     await spond.ExecutePlanAsync(actions, group, options.DryRun, DateTimeOffset.UtcNow, log.Reported, timeout.Token);

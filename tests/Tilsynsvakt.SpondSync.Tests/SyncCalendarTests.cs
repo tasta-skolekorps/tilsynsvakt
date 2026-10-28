@@ -13,7 +13,7 @@ public sealed class SyncCalendarTests
         string date, string meet, string start, string end, string invite)
     {
         var day = DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var desired = SyncPlanner.DesiredEvent(day, new("test-group", "test-subgroup", []), ["test-parent"]);
+        var desired = SyncPlanner.DesiredEvent(day, new("test-group", "test-subgroup", []), ["test-parent"], TestData.SitePassword);
         Assert.Equal(Parse(meet), desired.Meet);
         Assert.Equal(Parse(start), desired.Start);
         Assert.Equal(Parse(end), desired.End);

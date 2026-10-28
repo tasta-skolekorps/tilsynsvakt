@@ -63,7 +63,7 @@ public sealed class SafeHelpersTests
             [new ChildMember("test-child", ["test-subgroup"], [new Guardian("test-parent", "+4790000001", "test-parent")])]);
         var date = new DateOnly(2026, 11, 26);
         var action = Assert.Single(SyncPlanner.Plan([new(date, "taken", new Guard(1, "Familien Test", "+4790000001"))],
-            [], group, new HashSet<DateOnly> { date }, new(2026, 10, 5)));
+            [], group, new HashSet<DateOnly> { date }, new(2026, 10, 5), TestData.SitePassword));
 
         Assert.Equal(" – Familien Test", FormatPublicName(action.GuardName));
         foreach (var privateValue in new[] { "test-parent", "test-child", "test-group", "test-subgroup", "+4790000001", "90000001" })

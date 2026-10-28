@@ -65,7 +65,13 @@ or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option
 - `API_PASSWORD`: required shared access password for the backend API. The tool
   posts it to `POST /api/auth/login` and sends the returned key as `X-Api-Key` on
   roster requests. In GitHub Actions it comes from the repository secret
-  `ACCESS_PASSWORD`. Neither the password nor the key is ever logged.
+  `ACCESS_PASSWORD`. Neither the password nor the key is ever logged. The same
+  password is also written into the Spond event description (Spond events are
+  visible only to logged-in members) so guards can log in to the website:
+  `Se nettside https://tilsynsvakt.tastaskolekorps.no for informasjon (passord: {API_PASSWORD}), evt. ta kontakt på 924 23 946 hvis spørsmål. God vakt!`
+  followed by the ownership marker line. It must not be empty or contain line
+  breaks. Rotating `ACCESS_PASSWORD` updates the description of owned future events
+  on the next sync. The value is never committed; GitHub masks it in Actions logs.
 - `SPOND_GROUP_NAME`: defaults to `Tasta Skolekorps - Medlemmer`.
 - `SPOND_SUBGROUP_NAME`: defaults to `Tilsynsvakt`.
 - `SPOND_SYNC_DATES`: optional limit, comma-separated `yyyy-MM-dd`. Unset or empty
@@ -250,7 +256,8 @@ transport code and unrelated worktree changes were preserved.
 Public API in namespace `Tilsynsvakt.SpondSync`:
 
 `SyncPlanner.Plan(IReadOnlyList<RosterShift> roster, IReadOnlyList<ExistingEvent> existing,
-TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today)`
+TargetGroup group, IReadOnlySet<DateOnly> dates, DateOnly today, string sitePassword,
+IReadOnlySet<DateOnly>? manualDates = null)`
 returns `IReadOnlyList<SyncAction>` with `Create`, `Update`, `Delete`, `SkipUnmatched`.
 The project grants internals to `Tilsynsvakt.SpondSync.Tests` as well.
 
@@ -266,7 +273,7 @@ than incorrect hard-coded offsets. Cancellation must be an explicit open roster 
 a missing row for an owned event fails closed.
 
 `SyncPlanner.DesiredEvent` supplies the required title, location, exact Norwegian
-description, meet/start/end UTC times and invite time seven Oslo wall-clock days
+description (website URL plus the runtime-injected shared site password), meet/start/end UTC times and invite time seven Oslo wall-clock days
 before start. `EventSpec` is a domain plan, not a mutation DTO. DST conversion uses
 `TimeZoneInfo` for Europe/Oslo. `SyncCalendar.SelectDates`, `At`,
 `SyncPlanner.OwnedDate`, `NormalizePhone`, and `MatchGuardians` are independently testable.

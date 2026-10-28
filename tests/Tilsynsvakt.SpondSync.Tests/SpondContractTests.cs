@@ -11,7 +11,7 @@ public sealed class SpondContractTests
     private static readonly TargetGroup Group = new("test-group", "test-subgroup", [
         new ChildMember("test-child", ["test-subgroup"], [
             new Guardian("test-guardian", "+4790000001", "test-profile", "test-placeholder@example.invalid")])]);
-    private static EventSpec Desired => SyncPlanner.DesiredEvent(Date, Group, ["test-profile"]);
+    private static EventSpec Desired => SyncPlanner.DesiredEvent(Date, Group, ["test-profile"], TestData.SitePassword);
 
     [Fact]
     public void Create_UsesVerifiedGuardianOnlyShape()
@@ -76,13 +76,13 @@ public sealed class SpondContractTests
     [InlineData("2026-11-26", "2026-11-19T15:45:00Z")]
     public void Create_InvitationUsesSevenOsloWallClockDays(string day, string inviteTime)
     {
-        var desired = SyncPlanner.DesiredEvent(DateOnly.ParseExact(day, "yyyy-MM-dd"), Group, ["test-profile"]);
+        var desired = SyncPlanner.DesiredEvent(DateOnly.ParseExact(day, "yyyy-MM-dd"), Group, ["test-profile"], TestData.SitePassword);
         Assert.Equal(inviteTime, SpondPayloads.Create(desired, Group, "test-owner").GetProperty("inviteTime").GetString());
     }
     [Fact]
     public void Metadata_PreservesInviteAndSettingsWithoutRecipients()
     {
-        var source = SpondPayloads.Create(SyncPlanner.DesiredEvent(Date, Group, ["test-profile"]), Group, "test-owner");
+        var source = SpondPayloads.Create(SyncPlanner.DesiredEvent(Date, Group, ["test-profile"], TestData.SitePassword), Group, "test-owner");
         var fields = source.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone());
         fields["id"] = JsonSerializer.SerializeToElement("test-event");
         fields["location"] = JsonSerializer.SerializeToElement(new { id = "test-location", feature = SyncPlanner.Location });
@@ -161,7 +161,7 @@ public sealed class SpondContractTests
         var existing = (await new SpondClient(http).GetEventsAsync(Group.Id, new HashSet<DateOnly> { Date }, now: Now)).Owned;
         Assert.Single(existing);
         Assert.Empty(SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))], existing,
-            Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now)));
+            Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword));
     }
 
     [Theory]
@@ -171,7 +171,7 @@ public sealed class SpondContractTests
     {
         var existing = new ExistingEvent("test-event", Desired.Description, Desired with { GuardianIds = ["test-old-profile"] });
         var actions = SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))], [existing],
-            Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now));
+            Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword);
         var writes = new List<string>();
         var requests = 0;
         using var handler = new MockHandler(async request =>
@@ -249,7 +249,7 @@ public sealed class SpondContractTests
         var priorJson = EventJson(profileId: replacement ? "test-old-profile" : "test-profile", heading: "Test old heading");
         var prior = SpondClient.ReadState(priorJson)!;
         var actions = SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))],
-            [new("test-event", prior.Description, prior)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now));
+            [new("test-event", prior.Description, prior)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword);
         Assert.Equal(prior, actions[0].PriorState);
         var recipients = priorJson.GetProperty("recipients");
         var unsafeJson = condition switch
@@ -318,7 +318,7 @@ public sealed class SpondContractTests
         var state = EventJson(heading: "Test old heading");
         var prior = SpondClient.ReadState(state)!;
         var actions = SyncPlanner.Plan([new(Date, "taken", new(1, "Test guard", "+4790000001"))],
-            [new("test-event", prior.Description, prior)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now));
+            [new("test-event", prior.Description, prior)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword);
         var writes = 0;
         using var handler = new MockHandler(async request =>
         {
@@ -341,7 +341,7 @@ public sealed class SpondContractTests
     {
         var state = WithFields(EventJson(), ("recipients", new { group = new { id = Group.Id } }));
         var actions = SyncPlanner.Plan([new(Date, "open", null)],
-            [new("test-event", Desired.Description, null)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now));
+            [new("test-event", Desired.Description, null)], Group, new HashSet<DateOnly> { Date }, SyncCalendar.Today(Now), TestData.SitePassword);
         var writes = 0;
         using var handler = new MockHandler(request =>
         {
@@ -491,7 +491,7 @@ public sealed class SpondContractTests
 
         var guard = new Guard(1, "Test guard", "+4790000001");
         var actions = SyncPlanner.Plan([new(other, "taken", guard), new(third, "taken", guard)], [], Group,
-            new HashSet<DateOnly> { other, third }, today, listing.ManualDates);
+            new HashSet<DateOnly> { other, third }, today, TestData.SitePassword, listing.ManualDates);
         Assert.All(actions, action => Assert.Equal(SyncActionKind.Create, action.Kind));
         Assert.Equal(2, actions.Count);
     }
