@@ -164,7 +164,7 @@ public sealed class SpondClient(HttpClient http)
                 $"Uventede innstillinger i eid arrangement {SyncCalendar.Today(start):dd.MM.yyyy} " +
                 $"(id {OptionalText(item, "id") ?? "ukjent"}): {string.Join(", ", unexpected)}; ingen endringer sendt.");
         return new EventSpec(Text(item, "heading"), Text(item, "description"), Text(Property(item, "location"), "feature"),
-            meet, start, Instant(item, "endTimestamp"), Instant(item, "inviteTime"), Text(group, "id"), Text(subgroups[0], "id"),
+            meet, start, Instant(item, "endTimestamp"), OptionalText(item, "inviteTime") is null ? null : Instant(item, "inviteTime"), Text(group, "id"), Text(subgroups[0], "id"),
             guardians.Select(guardian => Text(guardian, "profileId")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             Property(item, "autoAccept").GetBoolean());
     }

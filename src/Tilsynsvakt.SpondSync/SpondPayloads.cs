@@ -38,7 +38,7 @@ public static class SpondPayloads
             visibility = "INVITEES", participantsHidden = true, autoReminderType = "REMIND_48H_BEFORE",
             matchInfo = (object?)null, autoAccept = false, attachments = System.Array.Empty<object>(),
             tasks = new { openTasks = System.Array.Empty<object>(), assignedTasks = System.Array.Empty<object>() },
-            inviteTime = Timestamp(desired.InviteAt),
+            inviteTime = Timestamp(desired.InviteAt ?? throw new SyncException("Invitasjonstidspunkt mangler.")),
             recipients = new { groupMembers = System.Array.Empty<object>(), guardians = Guardians(desired, group),
                 group = new { id = group.Id, subGroups = new[] { group.SubgroupId } } }
         });

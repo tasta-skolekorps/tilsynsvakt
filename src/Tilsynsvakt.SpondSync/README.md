@@ -56,6 +56,9 @@ or live service was run while implementing these contracts; tests use local mock
 the additional three-day reminder remains open. The create builder emits the
 requested location and invite time, but tests do not establish server acceptance
 or notification behavior. Only `REMIND_48H_BEFORE` is used, not a 72-hour option.
+An owned event read back without `inviteTime` (absent or null) is treated as
+"invitations already sent": `EventSpec.InviteAt` is `null` and matches any
+desired invite time, so the sync neither fails nor reschedules the invitation.
 
 ## Environment
 

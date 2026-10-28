@@ -691,11 +691,49 @@ public sealed class SpondContractTests
     [Fact]
     public void ReadState_MissingFieldNamesEvent()
     {
-        var fields = EventJson().EnumerateObject().Where(property => property.Name != "inviteTime")
+        var fields = EventJson().EnumerateObject().Where(property => property.Name != "endTimestamp")
             .ToDictionary(property => property.Name, property => property.Value.Clone());
         var error = Assert.Throws<SyncException>(() => SpondClient.ReadState(JsonSerializer.SerializeToElement(fields)));
-        Assert.Contains("mangler felt «inviteTime»", error.Message);
+        Assert.Contains("mangler felt «endTimestamp»", error.Message);
         Assert.Contains("(id test-event)", error.Message);
         Assert.Contains("ingen endringer sendt", error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReadState_MissingInviteTimeMeansInvitationsAlreadySent(bool explicitNull)
+    {
+        var fields = EventJson().EnumerateObject().Where(property => property.Name != "inviteTime")
+            .ToDictionary(property => property.Name, property => property.Value.Clone());
+        if (explicitNull) fields["inviteTime"] = JsonSerializer.SerializeToElement<object?>(null);
+        var state = SpondClient.ReadState(JsonSerializer.SerializeToElement(fields));
+        Assert.NotNull(state);
+        Assert.Null(state.InviteAt);
+        Assert.True(SyncPlanner.Equivalent(state, Desired));
+        Assert.True(SyncPlanner.Equivalent(state, SpondClient.ReadState(EventJson())!));
+        Assert.Empty(SyncReport.ChangedFields(state, Desired));
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SucceedsAfterInvitationsWereSent()
+    {
+        var fields = EventJson().EnumerateObject().Where(property => property.Name != "inviteTime")
+            .ToDictionary(property => property.Name, property => property.Value.Clone());
+        fields["description"] = JsonSerializer.SerializeToElement("Gammel tekst\n" + SyncPlanner.Marker(Date));
+        var state = JsonSerializer.SerializeToElement(fields);
+        var prior = SpondClient.ReadState(state)!;
+        JsonElement? written = null;
+        using var handler = new MockHandler(async request =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(state);
+            written = await request.Content!.ReadFromJsonAsync<JsonElement>();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        using var http = new HttpClient(handler);
+        var action = new SyncAction(Date, SyncActionKind.Update, "Test guard", "test-event", Desired) { PriorState = prior };
+        await new SpondClient(http).ExecutePlanAsync([action], Group, false, Now, _ => { });
+        Assert.NotNull(written);
+        Assert.False(written.Value.TryGetProperty("inviteTime", out _));
     }
 }
