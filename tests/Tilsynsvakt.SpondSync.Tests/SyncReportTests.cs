@@ -39,6 +39,26 @@ public sealed class SyncReportTests
         return lines;
     }
 
+    [Theory]
+    [InlineData(PhoneNotFoundReason.ChildOutsideSubgroup, "; foresatt finnes i gruppen, men barnet er ikke med i undergruppen")]
+    [InlineData(PhoneNotFoundReason.MemberNotGuardian, "; nummeret tilhører et medlem, ikke en foresatt")]
+    public void PhoneNotFound_ExplainsReasonWithMaskedHint(PhoneNotFoundReason reason, string text)
+    {
+        var outcome = new DateOutcome(D(23), DateOutcomeKind.Skipped, "Ola Test", SyncActionKind.SkipPhoneNotFound)
+            { PhoneReason = reason, PhoneHint = "46" };
+        Assert.Equal($"::warning::2026-11-23 telefonnummeret (slutter på 46) finnes ikke hos noen foresatt i undergruppen{text}; vakt hoppet over – Ola Test",
+            Assert.Single(SyncReport.Lines(outcome, false)));
+    }
+
+    [Fact]
+    public void PhoneNotFound_IgnoresHintThatIsNotTwoDigits()
+    {
+        var outcome = new DateOutcome(D(23), DateOutcomeKind.Skipped, null, SyncActionKind.SkipPhoneNotFound)
+            { PhoneHint = "+4790000046" };
+        Assert.Equal("::warning::2026-11-23 telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over",
+            Assert.Single(SyncReport.Lines(outcome, false)));
+    }
+
     [Fact]
     public void DryRun_OneLinePerDateAndSummary() => Assert.Equal(new[]
     {
@@ -48,7 +68,7 @@ public sealed class SyncReportTests
         "2026-11-20 vil slette",
         "2026-11-21 vil oppdatere (tittel) – Kari Test",
         "2026-11-22 vil erstatte (ny vakt) – Kari Test",
-        "::warning::2026-11-23 telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over – Ola Test",
+        "::warning::2026-11-23 telefonnummeret (slutter på 09) finnes ikke hos noen foresatt i undergruppen; nummeret finnes ikke i Spond-gruppen – sjekk nummeret i vaktlisten og i Spond; vakt hoppet over – Ola Test",
         "Oppsummering: vil opprette 1, vil oppdatere 2, vil slette 1, 1 uendret, 1 hoppet over"
     }, Render(true));
 
@@ -61,7 +81,7 @@ public sealed class SyncReportTests
         "2026-11-20 slettet",
         "2026-11-21 oppdatert (tittel) – Kari Test",
         "2026-11-22 erstattet – Kari Test",
-        "::warning::2026-11-23 telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over – Ola Test",
+        "::warning::2026-11-23 telefonnummeret (slutter på 09) finnes ikke hos noen foresatt i undergruppen; nummeret finnes ikke i Spond-gruppen – sjekk nummeret i vaktlisten og i Spond; vakt hoppet over – Ola Test",
         "Oppsummering: 1 opprettet, 2 oppdatert, 1 slettet, 1 uendret, 1 hoppet over"
     }, Render(false));
 
