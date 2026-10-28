@@ -9,6 +9,8 @@ public sealed record DateOutcome(DateOnly Date, DateOutcomeKind Kind, string? Gu
 {
     // Number of Spond write actions that must be reported before this date's line is final.
     public int Writes { get; init; }
+    public PhoneNotFoundReason? PhoneReason { get; init; }
+    public string? PhoneHint { get; init; }
 }
 
 public static class SyncReport
@@ -23,9 +25,10 @@ public static class SyncReport
             var shift = roster.FirstOrDefault(item => item.Date == date);
             var name = day.Select(action => action.GuardName).FirstOrDefault(item => item is not null)
                 ?? (shift?.Status == "taken" ? shift.Guard?.Name : null);
-            var warning = day.FirstOrDefault(action => action.Kind is SyncActionKind.SkipPhoneNotFound
+            var warningAction = day.FirstOrDefault(action => action.Kind is SyncActionKind.SkipPhoneNotFound
                 or SyncActionKind.SkipNoProfiles or SyncActionKind.WarnMissingProfiles
-                or SyncActionKind.SkipManualEvent)?.Kind;
+                or SyncActionKind.SkipManualEvent);
+            var warning = warningAction?.Kind;
             var create = day.Any(action => action.Kind == SyncActionKind.Create);
             var delete = day.Any(action => action.Kind == SyncActionKind.Delete);
             var update = day.FirstOrDefault(action => action.Kind == SyncActionKind.Update);
@@ -42,7 +45,9 @@ public static class SyncReport
                 update is null ? null : ChangedFields(update.PriorState, update.Desired))
             {
                 Writes = day.Count(action => action.Kind is SyncActionKind.Create
-                    or SyncActionKind.Update or SyncActionKind.Delete)
+                    or SyncActionKind.Update or SyncActionKind.Delete),
+                PhoneReason = warningAction?.PhoneReason,
+                PhoneHint = warningAction?.PhoneHint
             });
         }
         return outcomes;
@@ -84,10 +89,26 @@ public static class SyncReport
             _ when outcome.Warning == SyncActionKind.SkipManualEvent => outcome.GuardName is null
                 ? "manuelt arrangement finnes; ingen vakt" : "manuelt arrangement finnes; vakt hoppet over",
             _ => outcome.Warning == SyncActionKind.SkipPhoneNotFound
-                ? "telefonnummeret finnes ikke hos noen foresatt i undergruppen; vakt hoppet over"
+                ? PhoneNotFoundLabel(outcome)
                 : "ingen av de foresatte har Spond-profil; vakt hoppet over"
         };
         yield return $"{(outcome.Kind == DateOutcomeKind.Skipped ? "::warning::" : "")}{date} {label}{name}";
+    }
+
+    private static string PhoneNotFoundLabel(DateOutcome outcome)
+    {
+        var hint = outcome.PhoneHint is { Length: 2 } digits && digits.All(char.IsAsciiDigit) ? $" (slutter på {digits})" : "";
+        var reason = outcome.PhoneReason switch
+        {
+            PhoneNotFoundReason.ChildOutsideSubgroup =>
+                "; foresatt finnes i gruppen, men barnet er ikke med i undergruppen",
+            PhoneNotFoundReason.MemberNotGuardian =>
+                "; nummeret tilhører et medlem, ikke en foresatt",
+            PhoneNotFoundReason.NotInGroup =>
+                "; nummeret finnes ikke i Spond-gruppen – sjekk nummeret i vaktlisten og i Spond",
+            _ => ""
+        };
+        return $"telefonnummeret{hint} finnes ikke hos noen foresatt i undergruppen{reason}; vakt hoppet over";
     }
 
     public static string Header(bool dryRun, IReadOnlySet<DateOnly> dates)

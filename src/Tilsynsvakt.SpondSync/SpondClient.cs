@@ -42,8 +42,10 @@ public sealed class SpondClient(HttpClient http)
                     OptionalText(guardian, "phoneNumber"),
                     guardian.TryGetProperty("profile", out var profile) && profile.ValueKind == JsonValueKind.Object
                         ? OptionalText(profile, "id") : null,
-                    OptionalText(guardian, "email"))).ToArray()
-                : System.Array.Empty<Guardian>())).ToArray();
+                    OptionalText(guardian, "email"),
+                    guardian.TryGetProperty("profile", out var guardianProfile) && guardianProfile.ValueKind == JsonValueKind.Object
+                        ? OptionalPhone(guardianProfile) : null)).ToArray()
+                : System.Array.Empty<Guardian>(), OptionalPhone(member))).ToArray();
         if (members.GroupBy(member => member.Id).Any(bucket => bucket.Count() != 1))
             throw new SyncException("Tvetydig medlemsliste fra Spond.");
         return new TargetGroup(Text(group, "id"), Text(subgroups[0], "id"), members);
@@ -330,6 +332,10 @@ public sealed class SpondClient(HttpClient http)
     // Only the constant field name is included; external values and identifiers are never logged.
     internal static SyncException Incomplete(string field) =>
         new($"Ufullstendig ekstern respons (mangler felt «{field}»).");
+
+    // Phones are optional diagnostics/match inputs; non-string shapes are ignored rather than failing the sync.
+    private static string? OptionalPhone(JsonElement element) =>
+        element.TryGetProperty("phoneNumber", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     internal static string? OptionalText(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.GetString() : null;

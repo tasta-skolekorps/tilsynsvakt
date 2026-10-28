@@ -4,8 +4,12 @@ namespace Tilsynsvakt.SpondSync;
 
 public sealed record Guard(int Id, string Name, string Phone);
 public sealed record RosterShift(DateOnly Date, string Status, Guard? Guard);
-public sealed record Guardian(string Id, string? PhoneNumber, string? ProfileId = null, string? Email = null);
-public sealed record ChildMember(string Id, IReadOnlyList<string> SubGroups, IReadOnlyList<Guardian> Guardians);
+// ProfilePhoneNumber is only used for matching; PhoneNumber is what is sent back to Spond.
+public sealed record Guardian(string Id, string? PhoneNumber, string? ProfileId = null, string? Email = null,
+    string? ProfilePhoneNumber = null);
+// PhoneNumber is the member's own phone (adult members); it is only used to diagnose skipped shifts.
+public sealed record ChildMember(string Id, IReadOnlyList<string> SubGroups, IReadOnlyList<Guardian> Guardians,
+    string? PhoneNumber = null);
 public sealed record TargetGroup(string Id, string SubgroupId, IReadOnlyList<ChildMember> Members);
 // InviteAt is null when Spond omits inviteTime on readback, which means invitations were already sent.
 public sealed record EventSpec(
@@ -16,11 +20,16 @@ public sealed record ExistingEvent(string Id, string? Description, EventSpec? Ve
 public sealed record EventListing(IReadOnlyList<ExistingEvent> Owned, IReadOnlySet<DateOnly> ManualDates);
 public enum SyncActionKind { Create, Update, Delete, SkipPhoneNotFound, SkipNoProfiles, WarnMissingProfiles, SkipManualEvent }
 public enum GuardianMatchOutcome { Matched, PhoneNotFound, NoProfiles }
-public sealed record GuardianMatch(GuardianMatchOutcome Outcome, IReadOnlyList<string> ProfileIds, bool MissingProfiles);
+public enum PhoneNotFoundReason { NotInGroup, ChildOutsideSubgroup, MemberNotGuardian }
+public sealed record GuardianMatch(GuardianMatchOutcome Outcome, IReadOnlyList<string> ProfileIds, bool MissingProfiles,
+    PhoneNotFoundReason? Reason = null);
 public sealed record SyncAction(DateOnly Date, SyncActionKind Kind, string? GuardName,
     string? EventId, EventSpec? Desired)
 {
     public EventSpec? PriorState { get; init; }
+    public PhoneNotFoundReason? PhoneReason { get; init; }
+    // Last two digits of the backend phone; never the full number.
+    public string? PhoneHint { get; init; }
 }
 
 public static class SyncCalendar
@@ -87,8 +96,10 @@ public static class SyncPlanner
     public static string? NormalizePhone(string? value)
     {
         if (value is null) return null;
-        var phone = value.Replace(" ", "").Replace("-", "");
+        var phone = string.Concat(value.Where(ch => !char.IsWhiteSpace(ch) && ch is not '-' and not '.' and not '(' and not ')'));
         if (phone.StartsWith("0047", StringComparison.Ordinal)) phone = "+47" + phone[4..];
+        // Ten digits starting with 47 can only be a Norwegian number without the plus sign.
+        if (phone.Length == 10 && phone.StartsWith("47", StringComparison.Ordinal)) phone = "+" + phone;
         if (phone.Length == 8) phone = "+47" + phone;
         return phone.Length == 11 && phone.StartsWith("+47", StringComparison.Ordinal) &&
             phone[3] is >= '2' and <= '9' && phone.AsSpan(3).IndexOfAnyExceptInRange('0', '9') < 0
@@ -100,8 +111,8 @@ public static class SyncPlanner
         var phone = NormalizePhone(guard.Phone);
         if (phone is null) throw new SyncException("Ugyldig telefonformat i vaktlisten.");
         var children = group.Members.Where(member => member.SubGroups.Contains(group.SubgroupId, StringComparer.Ordinal) &&
-            member.Guardians.Any(guardian => NormalizePhone(guardian.PhoneNumber) == phone)).ToArray();
-        if (children.Length == 0) return new(GuardianMatchOutcome.PhoneNotFound, [], false);
+            member.Guardians.Any(guardian => GuardianHasPhone(guardian, phone))).ToArray();
+        if (children.Length == 0) return new(GuardianMatchOutcome.PhoneNotFound, [], false, NotFoundReason(phone, group));
         var guardians = children.SelectMany(child => child.Guardians).ToArray();
         var ids = guardians.Where(guardian => !string.IsNullOrWhiteSpace(guardian.ProfileId))
             .Select(guardian => guardian.ProfileId!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -113,6 +124,20 @@ public static class SyncPlanner
             ? new(GuardianMatchOutcome.NoProfiles, [], true)
             : new(GuardianMatchOutcome.Matched, ids, missing);
     }
+
+    private static bool GuardianHasPhone(Guardian guardian, string phone) =>
+        NormalizePhone(guardian.PhoneNumber) == phone || NormalizePhone(guardian.ProfilePhoneNumber) == phone;
+
+    // Diagnostic only: explains why a phone did not match, so the admin knows what to fix in Spond.
+    private static PhoneNotFoundReason NotFoundReason(string phone, TargetGroup group) =>
+        group.Members.Any(member => member.Guardians.Any(guardian => GuardianHasPhone(guardian, phone)))
+            ? PhoneNotFoundReason.ChildOutsideSubgroup
+            : group.Members.Any(member => NormalizePhone(member.PhoneNumber) == phone)
+                ? PhoneNotFoundReason.MemberNotGuardian
+                : PhoneNotFoundReason.NotInGroup;
+
+    public static string? PhoneHint(string? phone) =>
+        NormalizePhone(phone) is { } normalized ? normalized[^2..] : null;
 
     public static EventSpec DesiredEvent(DateOnly date, TargetGroup group, IReadOnlyList<string> guardianIds, string sitePassword) =>
         new(Heading, Description(sitePassword) + "\n" + Marker(date), Location,
@@ -159,7 +184,11 @@ public static class SyncPlanner
             if (match.Outcome != GuardianMatchOutcome.Matched)
             {
                 actions.Add(new(date, match.Outcome == GuardianMatchOutcome.PhoneNotFound
-                    ? SyncActionKind.SkipPhoneNotFound : SyncActionKind.SkipNoProfiles, shift.Guard.Name, null, null));
+                    ? SyncActionKind.SkipPhoneNotFound : SyncActionKind.SkipNoProfiles, shift.Guard.Name, null, null)
+                {
+                    PhoneReason = match.Reason,
+                    PhoneHint = match.Outcome == GuardianMatchOutcome.PhoneNotFound ? PhoneHint(shift.Guard.Phone) : null
+                });
                 continue;
             }
             if (match.MissingProfiles)

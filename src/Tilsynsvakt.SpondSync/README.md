@@ -29,6 +29,14 @@ or live service was run while implementing these contracts; tests use local mock
   sanitized warning; the shift is skipped only when the phone matches no guardian
   in the subgroup or none of the matched guardians has a profile, each with its
   own sanitized warning reason.
+- Phone normalization accepts Norwegian numbers as `+47XXXXXXXX`, `0047…`,
+  `47XXXXXXXX` (10 digits) or 8 digits, ignoring any whitespace (including
+  non-breaking), `-`, `.`, `(` and `)`; anything else is rejected. A guardian
+  matches on `guardian.phoneNumber` or, as fallback, `guardian.profile.phoneNumber`.
+- When a phone matches no guardian in the subgroup, the warning adds the last two
+  digits of the backend phone and a diagnostic reason: the guardian's child is
+  not in the subgroup, the number belongs to a group member (not a guardian; such
+  members are never invited), or the number is not in the Spond group at all.
 - Create `POST /core/v1/sponds`: guardian objects contain `email`, `phoneNumber`,
   `profileId`; `groupMembers` is empty, and create subgroup IDs are strings.
   Owner comes only from `/core/v1/profile.id`. Exact heading/description/marker,
@@ -84,8 +92,9 @@ desired invite time, so the sync neither fails nor reschedules the invitation.
 
 Run: `dotnet run --project src/Tilsynsvakt.SpondSync -c Release`.
 Missing configuration exits 1 without network access. Other errors are sanitized.
-Logs contain dates, actions, field names, guardian counts and backend guard names
-only. No Spond data is persisted.
+Logs contain dates, actions, field names, guardian counts, backend guard names and,
+for phone-not-found skips, only the last two digits of the backend phone. No
+Spond data is persisted.
 
 Output: a header (`Tørrkjøring – ingen endringer sendes til Spond` or `Skriver til
 Spond`) with the date window, then exactly one line per date in both modes:

@@ -210,6 +210,10 @@ public sealed class SyncPlannerTests
     [InlineData("+47 900 00 001")]
     [InlineData("90000001")]
     [InlineData("004790000001")]
+    [InlineData("4790000001")]
+    [InlineData("+47\u00a0900\u00a000\u00a0001")]
+    [InlineData("(+47) 900.00.001")]
+    [InlineData(" +47 90000001 ")]
     public void MatchGuardians_MatchesSupportedPhoneFormats(string phone)
     {
         Assert.Equal("+4790000001", SyncPlanner.NormalizePhone(phone));
@@ -246,8 +250,48 @@ public sealed class SyncPlannerTests
     [InlineData("+4690000001")]
     [InlineData("9000000x")]
     [InlineData("+4710000001")]
+    [InlineData("4690000001")]
+    [InlineData("479000000")]
+    [InlineData("47900000011")]
     public void NormalizePhone_RejectsInvalidPhones(string? phone) =>
         Assert.Null(SyncPlanner.NormalizePhone(phone));
+
+    [Fact]
+    public void MatchGuardians_FallsBackToGuardianProfilePhone()
+    {
+        var child = Group.Members[0] with { Guardians = [
+            new Guardian("test-parent-a", null, "test-parent-a", ProfilePhoneNumber: "+47 900 00 001")] };
+        var match = SyncPlanner.MatchGuardians(TestGuard, Group with { Members = [child] });
+        Assert.Equal(GuardianMatchOutcome.Matched, match.Outcome);
+        Assert.Equal(new[] { "test-parent-a" }, match.ProfileIds);
+    }
+
+    [Fact]
+    public void MatchGuardians_PhoneNotFoundReasons()
+    {
+        Assert.Equal(PhoneNotFoundReason.NotInGroup,
+            SyncPlanner.MatchGuardians(TestGuard with { Phone = "+4790000009" }, Group).Reason);
+
+        var outside = Group.Members[0] with { SubGroups = ["test-other-subgroup"] };
+        Assert.Equal(PhoneNotFoundReason.ChildOutsideSubgroup,
+            SyncPlanner.MatchGuardians(TestGuard, Group with { Members = [outside] }).Reason);
+
+        var adult = new ChildMember("test-adult", ["test-subgroup"], [], "+4790000001");
+        var asMember = SyncPlanner.MatchGuardians(TestGuard, Group with { Members = [adult] });
+        Assert.Equal(GuardianMatchOutcome.PhoneNotFound, asMember.Outcome);
+        Assert.Equal(PhoneNotFoundReason.MemberNotGuardian, asMember.Reason);
+        Assert.Empty(asMember.ProfileIds);
+    }
+
+    [Fact]
+    public void Plan_PhoneNotFoundCarriesReasonAndMaskedHintOnly()
+    {
+        var action = Assert.Single(SyncPlanner.Plan([new(PilotDate, "taken", TestGuard with { Phone = "+4790000046" })],
+            [], Group, new HashSet<DateOnly> { PilotDate }, Today, TestData.SitePassword));
+        Assert.Equal(SyncActionKind.SkipPhoneNotFound, action.Kind);
+        Assert.Equal(PhoneNotFoundReason.NotInGroup, action.PhoneReason);
+        Assert.Equal("46", action.PhoneHint);
+    }
 
     [Fact]
     public void MatchGuardians_IgnoresMatchingFamilyOutsideSubgroup()

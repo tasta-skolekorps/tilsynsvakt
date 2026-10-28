@@ -199,6 +199,23 @@ public sealed class SpondContractTests
     }
 
     [Fact]
+    public async Task GroupRead_ParsesProfileAndMemberPhonesForMatchingAndDiagnostics()
+    {
+        using var handler = new MockHandler(_ => Task.FromResult(Json(new[] { new { id = Group.Id, name = "Test group",
+            subGroups = new[] { new { id = Group.SubgroupId, name = "Test subgroup" } }, members = new object[] {
+                new { id = "test-child", subGroups = new[] { Group.SubgroupId }, guardians = new[] {
+                    new { id = "test-guardian", phoneNumber = (string?)null, profile = new { id = "test-profile", phoneNumber = "4790000001" } } } },
+                new { id = "test-adult", subGroups = new[] { Group.SubgroupId }, phoneNumber = "+4790000002" } } } })));
+        using var http = new HttpClient(handler);
+        var group = await new SpondClient(http).GetTargetGroupAsync("Test group", "Test subgroup");
+
+        Assert.Equal("test-profile", Assert.Single(SyncPlanner.MatchGuardians(new(1, "Test guard", "+4790000001"), group).ProfileIds));
+        Assert.Null(group.Members[0].Guardians[0].PhoneNumber);
+        Assert.Equal(PhoneNotFoundReason.MemberNotGuardian,
+            SyncPlanner.MatchGuardians(new(2, "Test adult", "+4790000002"), group).Reason);
+    }
+
+    [Fact]
     public async Task ListRead_UsesVerifiedQueryAndProducesIdempotentPlan()
     {
         using var handler = new MockHandler(request =>
