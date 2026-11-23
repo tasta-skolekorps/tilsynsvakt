@@ -25,6 +25,7 @@ const state = {
   swaps: [],
   swapTarget: null,
   usagePlan: null,
+  planDate: null,
   contacts: [],
   staticAvailable: false,
   apiAvailable: false
@@ -35,6 +36,10 @@ const elements = {
   guardStatus: document.querySelector("#guard-status"),
   notice: document.querySelector("#notice"),
   todayLabel: document.querySelector("#today-label"),
+  planTitle: document.querySelector("#plan-title"),
+  dayPicker: document.querySelector("#day-picker"),
+  nowPanel: document.querySelector("#now-panel"),
+  scheduleTitle: document.querySelector("#schedule-title"),
   currentActivity: document.querySelector("#current-activity"),
   currentTime: document.querySelector("#current-time"),
   planWarning: document.querySelector("#plan-warning"),
@@ -371,10 +376,40 @@ async function loadShifts({ message } = {}) {
   }
 }
 
+function addDays(value, days) {
+  return new Date(dateFromIso(value).getTime() + days * 86400000).toISOString().slice(0, 10);
+}
+
+function shortDate(value) {
+  return formatDate(value, { day: "2-digit", month: "2-digit" }).replace(/\.$/, "");
+}
+
+function currentWeekDates(today) {
+  const monday = addDays(today, -((dayIndex(today) + 6) % 7));
+  return Array.from({ length: 7 }, (_, offset) => addDays(monday, offset));
+}
+
+function renderDayPicker(today, selected) {
+  elements.dayPicker.replaceChildren();
+  for (const iso of currentWeekDates(today)) {
+    const name = weekdayNames[dayIndex(iso)];
+    const button = node("button", `day-option${iso === today ? " day-today" : ""}`);
+    button.type = "button";
+    button.dataset.date = iso;
+    button.setAttribute("aria-pressed", String(iso === selected));
+    button.setAttribute("aria-label", `${name} ${shortDate(iso)}${iso === today ? ", i dag" : ""}`);
+    button.append(node("span", "day-name", name.slice(0, 3)), node("span", "day-date", shortDate(iso)));
+    elements.dayPicker.append(button);
+  }
+}
+
 function renderPlan() {
   const today = todayIso();
-  const date = dateFromIso(today);
-  const day = dayIndex(today);
+  const week = currentWeekDates(today);
+  if (!week.includes(state.planDate)) state.planDate = today;
+  const selected = state.planDate;
+  const isToday = selected === today;
+  const day = dayIndex(selected);
   const minutes = currentOsloMinutes();
   const humanDate = new Intl.DateTimeFormat("nb-NO", {
     timeZone: osloZone,
@@ -382,11 +417,17 @@ function renderPlan() {
     day: "2-digit",
     month: "2-digit",
     year: "numeric"
-  }).format(date);
+  }).format(dateFromIso(selected));
+  const dayLabel = isToday ? "i dag" : `${weekdayNames[day]} ${shortDate(selected)}`;
   elements.todayLabel.textContent = humanDate.charAt(0).toLocaleUpperCase("nb-NO") + humanDate.slice(1);
+  elements.planTitle.textContent = isToday ? "Dagens plan" : `Plan for ${weekdayNames[day]}`;
+  elements.scheduleTitle.textContent = isToday ? "Videre i dag" : "Aktiviteter";
+  elements.todaySchedule.setAttribute("aria-label", `Aktiviteter i gymsalen ${dayLabel}`);
+  elements.nowPanel.hidden = !isToday;
   elements.currentTime.textContent = `Klokken ${new Intl.DateTimeFormat("nb-NO", { timeZone: osloZone, hour: "2-digit", minute: "2-digit" }).format(new Date())}`;
   elements.planDay.textContent = weekdayNames[day];
   elements.todaySchedule.replaceChildren();
+  renderDayPicker(today, selected);
 
   const plan = state.usagePlan;
   if (!plan) {
@@ -394,20 +435,25 @@ function renderPlan() {
     elements.planWarning.textContent = "Den lokale ukeplanen kunne ikke lastes.";
     return;
   }
-  const isCurrentPlan = today >= plan.validFrom && today <= plan.validTo;
+  const isCurrentPlan = selected >= plan.validFrom && selected <= plan.validTo;
   elements.planWarning.textContent = isCurrentPlan ? "" : `Ukeplan ${plan.schoolYear} gjelder ${formatDate(plan.validFrom)}–${formatDate(plan.validTo)}. Ny plan er ikke publisert.`;
-  const closed = isCurrentPlan ? closedPeriod(today) : null;
+  const closed = isCurrentPlan ? closedPeriod(selected) : null;
   const entries = isCurrentPlan && !closed
-    ? plan.entries.filter(entry => entry.day === (day || 7) && isEntryActive(entry, today)).sort((a, b) => a.start.localeCompare(b.start))
+    ? plan.entries.filter(entry => entry.day === (day || 7) && isEntryActive(entry, selected)).sort((a, b) => a.start.localeCompare(b.start))
     : [];
-  const now = entries.find(entry => minuteOfDay(entry.start) <= minutes && minutes < minuteOfDay(entry.end));
-  const next = entries.filter(entry => minuteOfDay(entry.start) > minutes);
+  const now = isToday ? entries.find(entry => minuteOfDay(entry.start) <= minutes && minutes < minuteOfDay(entry.end)) : null;
   elements.currentActivity.textContent = now ? now.group : "Ingen aktivitet registrert nå.";
   if (!isCurrentPlan) elements.currentActivity.textContent = "Plan for denne datoen er ikke publisert.";
   if (closed) elements.currentActivity.textContent = `${closed.label} – ingen tilsynsvakt.`;
 
   if (entries.length === 0) {
-    elements.todaySchedule.append(node("li", "empty-state", closed ? `${closed.label}: ingen tilsynsvakt i dag.` : isCurrentPlan ? "Ingen aktiviteter i gymsalen i dag." : "Denne datoen ligger utenfor den publiserte ukeplanen."));
+    let message;
+    if (closed) message = `${closed.label}: ingen tilsynsvakt ${dayLabel}.`;
+    else if (!isCurrentPlan) message = "Denne datoen ligger utenfor den publiserte ukeplanen.";
+    else if (day === 5) message = "Ingen aktiviteter i gymsalen på fredager.";
+    else if (day === 0 || day === 6) message = "Ingen aktiviteter i gymsalen i helgen.";
+    else message = `Ingen aktiviteter i gymsalen ${dayLabel}.`;
+    elements.todaySchedule.append(node("li", "empty-state", message));
     return;
   }
   for (const entry of entries) {
@@ -419,8 +465,8 @@ function renderPlan() {
       const contact = state.contacts.find(candidate => candidate.id === entry.contactId);
       if (contact) detail.append(node("span", "muted", contact.name));
     }
-    const status = node("span", "schedule-status", entry === now ? "Nå" : minuteOfDay(entry.start) > minutes ? "Kommer" : "Ferdig");
-    item.append(time, detail, status);
+    item.append(time, detail);
+    if (isToday) item.append(node("span", "schedule-status", entry === now ? "Nå" : minuteOfDay(entry.start) > minutes ? "Kommer" : "Ferdig"));
     elements.todaySchedule.append(item);
   }
 }
@@ -786,6 +832,14 @@ function setView() {
 }
 
 function setupForms() {
+  elements.dayPicker.addEventListener("click", event => {
+    const button = event.target.closest("button[data-date]");
+    if (!button) return;
+    state.planDate = button.dataset.date;
+    renderPlan();
+    elements.dayPicker.querySelector(`[data-date="${state.planDate}"]`)?.focus();
+  });
+
   elements.guardSelect.addEventListener("change", () => {
     state.selectedGuardId = Number(elements.guardSelect.value) || null;
     state.swapTarget = null;

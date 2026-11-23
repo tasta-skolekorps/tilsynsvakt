@@ -21,13 +21,13 @@ async function run() {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
   const screenshots = fs.mkdtempSync(path.join(os.tmpdir(), "tilsynsvakt-app-auth-"));
   try {
-    async function openPage({ viewport = { width: 390, height: 844 }, storage = {}, login, api } = {}) {
+    async function openPage({ viewport = { width: 390, height: 844 }, storage = {}, login, api, now = fixedNow } = {}) {
       const context = await browser.newContext({ viewport, serviceWorkers: "block" });
       const page = await context.newPage();
       const errors = [];
       const requests = [];
       page.on("pageerror", error => errors.push(error.message));
-      await page.clock.setFixedTime(fixedNow);
+      await page.clock.setFixedTime(now);
       await context.addInitScript(entries => {
         if (sessionStorage.getItem("fixture-seeded")) return;
         sessionStorage.setItem("fixture-seeded", "1");
@@ -228,6 +228,36 @@ async function run() {
       assert.deepEqual(errors, []);
       await context.close();
       console.log("PASS: logout clears apiKey, guard cache and selected guard");
+    }
+
+    // Day picker: other weekdays of the current week, now/next only for today.
+    {
+      const { context, page, errors } = await openPage({ now: new Date("2026-11-26T18:00:00+01:00") });
+      const scheduleText = () => page.locator("#today-schedule").textContent();
+      await page.locator("#today-schedule .schedule-item").first().waitFor();
+      assert.equal(await page.locator("#day-picker button").count(), 7);
+      assert.equal(await page.locator('#day-picker [aria-pressed="true"]').getAttribute("data-date"), "2026-11-26");
+      assert.equal(await page.locator("#plan-title").textContent(), "Dagens plan");
+      assert.equal(await page.locator("#current-activity").textContent(), "Tasta turn");
+      assert.equal(await page.locator("#today-schedule .schedule-current").count(), 1);
+
+      await page.locator('#day-picker [data-date="2026-11-24"]').click();
+      assert.equal(await page.locator('#day-picker [data-date="2026-11-24"]').getAttribute("aria-pressed"), "true");
+      assert.equal(await page.locator("#plan-title").textContent(), "Plan for tirsdag");
+      assert.equal(await page.locator("#now-panel").isVisible(), false);
+      assert.match(await scheduleText(), /Tasta turn[\s\S]*Pol Idrettslag/);
+      assert.equal(await page.locator("#today-schedule .schedule-status").count(), 0);
+      assert.equal(await page.locator("#today-schedule .schedule-current").count(), 0);
+
+      await page.locator('#day-picker [data-date="2026-11-27"]').click();
+      assert.equal(await scheduleText(), "Ingen aktiviteter i gymsalen på fredager.");
+      await page.locator('#day-picker [data-date="2026-11-29"]').click();
+      assert.equal(await scheduleText(), "Ingen aktiviteter i gymsalen i helgen.");
+      await page.locator('#day-picker [data-date="2026-11-26"]').click();
+      assert.equal(await page.locator("#now-panel").isVisible(), true);
+      assert.deepEqual(errors, []);
+      await context.close();
+      console.log("PASS: day picker shows other weekdays without now/next highlighting");
     }
 
     console.log(`Screenshots: ${screenshots}`);
