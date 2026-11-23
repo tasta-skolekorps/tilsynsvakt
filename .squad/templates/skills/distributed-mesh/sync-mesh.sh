@@ -13,15 +13,15 @@ set -euo pipefail
 # Handle --init mode
 if [ "${1:-}" = "--init" ]; then
   MESH_JSON="${2:-mesh.json}"
-  
+
   if [ ! -f "$MESH_JSON" ]; then
     echo "❌ $MESH_JSON not found"
     exit 1
   fi
-  
+
   echo "🚀 Initializing mesh state repository..."
   squads=$(jq -r '.squads | keys[]' "$MESH_JSON")
-  
+
   # Create squad directories with placeholder SUMMARY.md
   for squad in $squads; do
     if [ ! -d "$squad" ]; then
@@ -30,7 +30,7 @@ if [ "${1:-}" = "--init" ]; then
     else
       echo "  • $squad/ exists (skipped)"
     fi
-    
+
     if [ ! -f "$squad/SUMMARY.md" ]; then
       echo -e "# $squad\n\n_No state published yet._" > "$squad/SUMMARY.md"
       echo "  ✓ Created $squad/SUMMARY.md"
@@ -38,7 +38,7 @@ if [ "${1:-}" = "--init" ]; then
       echo "  • $squad/SUMMARY.md exists (skipped)"
     fi
   done
-  
+
   # Generate root README.md
   if [ ! -f "README.md" ]; then
     {
@@ -60,7 +60,7 @@ if [ "${1:-}" = "--init" ]; then
   else
     echo "  • README.md exists (skipped)"
   fi
-  
+
   echo ""
   echo "✅ Mesh state repository initialized"
   exit 0
@@ -91,13 +91,18 @@ for squad in $(jq -r '.squads | to_entries[] | select(.value.zone == "remote-opa
   auth=$(jq -r ".squads.\"$squad\".auth // \"\"" "$MESH_JSON")
 
   mkdir -p "$target"
-  auth_flag=""
+  curl_args=(--silent --fail)
+  header=""
   if [ "$auth" = "bearer" ]; then
     token_var="$(echo "${squad}" | tr '[:lower:]-' '[:upper:]_')_TOKEN"
-    [ -n "${!token_var:-}" ] && auth_flag="--header \"Authorization: Bearer ${!token_var}\""
+    token=$(printenv "$token_var" || true)
+    if [ -n "$token" ]; then
+      curl_args+=(--header @-)
+      header="Authorization: Bearer $token"
+    fi
   fi
 
-  eval curl --silent --fail $auth_flag "$source" -o "$target/SUMMARY.md" 2>/dev/null \
+  printf '%s\n' "$header" | curl "${curl_args[@]}" --url "$source" -o "$target/SUMMARY.md" 2>/dev/null \
     || echo "# ${squad} — unavailable ($(date))" > "$target/SUMMARY.md"
 done
 

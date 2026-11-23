@@ -1,5 +1,5 @@
 name: Squad Docs — Build & Deploy
-# Project type was not detected — configure documentation build commands below
+# dotnet project — configure documentation build commands below
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Build docs
         run: |

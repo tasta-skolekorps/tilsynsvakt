@@ -8,7 +8,7 @@ source: design proposal
 
 # Skill: Tiered Agent Memory
 
-> **Status (v0.10.0):** This skill describes a **design proposal**, not a shipped runtime. Skill files install via `squad init`/`upgrade`, but the underlying tier scaffolding (`.squad/memory/hot/`, `cold/`, `wiki/`), Scribe promotion logic, and spawn-template tier-aware reads are tracked in [bradygaster/squad#1264](https://github.com/bradygaster/squad/issues/1264). Until those land, agents continue to load full `history.md` + `decisions.md` on every spawn.
+> **Status (v0.10.0):** This skill describes a **design proposal**, not a shipped runtime. Skill files install via `squad init`/`upgrade`, but the underlying tier scaffolding (`.squad/memory/hot/`, `cold/`, `wiki/`), Scribe promotion logic, and spawn-template tier-aware reads are tracked in [bradygaster/squad#1264](https://github.com/github/squad/issues/1264). Until those land, agents continue to load full `history.md` + `decisions.md` on every spawn.
 
 ## Overview
 
@@ -116,9 +116,9 @@ Until then, see the Scribe charter for current behavior: `.squad/agents/scribe/c
 
 ## References
 
-- Tracking issue: [bradygaster/squad#1264](https://github.com/bradygaster/squad/issues/1264) — installation gap + runtime status
-- Original design spike: [bradygaster/squad#686](https://github.com/bradygaster/squad/issues/686) — tiered memory implementation plan
-- Related: [bradygaster/squad#600](https://github.com/bradygaster/squad/issues/600) — context payload growth
+- Tracking issue: [bradygaster/squad#1264](https://github.com/github/squad/issues/1264) — installation gap + runtime status
+- Original design spike: [bradygaster/squad#686](https://github.com/github/squad/issues/686) — tiered memory implementation plan
+- Related: [bradygaster/squad#600](https://github.com/github/squad/issues/600) — context payload growth
 
 ---
 
@@ -205,10 +205,10 @@ Include when:
 ## Escalation
 
 If blocked or uncertain:
-- Architecture questions → @picard
-- Security concerns → @worf
-- Infrastructure/deployment → @belanna
-- Memory/history questions → @scribe
+- Architecture questions → current architecture owner from `routing.md`
+- Security concerns → current security owner from `routing.md`
+- Infrastructure/deployment → current delivery owner from `routing.md`
+- Memory/history questions → current memory owner from `routing.md`
 
 ---
 
@@ -217,5 +217,4 @@ If blocked or uncertain:
 - Hot tier is always included; keep it focused
 - Cold adds a summary; only include when history is relevant
 - Wiki adds variable size; only include specific relevant docs
-- Runtime backing is tracked in [bradygaster/squad#1264](https://github.com/bradygaster/squad/issues/1264) — until those changes land, this skill is design-only and agents continue to load full history.md + decisions.md on every spawn
-
+- Runtime backing is tracked in [bradygaster/squad#1264](https://github.com/github/squad/issues/1264) — until those changes land, this skill is design-only and agents continue to load full history.md + decisions.md on every spawn
