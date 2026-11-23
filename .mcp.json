@@ -20,6 +20,6 @@
       "headers": {
         "X-MCP-Toolsets": "git,issues,labels,projects,repos,pull_requests,users"
       }
-    },
+    }
   }
 }

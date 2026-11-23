@@ -1,9 +1,59 @@
 {
+  "schema": "squad-agent-provenance/v1",
+  "schema_version": 1,
+  "revision": 1,
+  "generated_at": "2026-11-23T13:42:26.650Z",
   "agents": {
-    "lead": { "persistent_name": "Lead", "universe": "descriptive", "created_at": "2026-10-03T09:07:58.155Z", "legacy_named": false, "status": "active" },
-    "backend": { "persistent_name": "Backend", "universe": "descriptive", "created_at": "2026-10-03T09:07:58.155Z", "legacy_named": false, "status": "active" },
-    "frontend": { "persistent_name": "Frontend", "universe": "descriptive", "created_at": "2026-10-03T09:07:58.155Z", "legacy_named": false, "status": "active" },
-    "tester": { "persistent_name": "Tester", "universe": "descriptive", "created_at": "2026-10-03T09:07:58.155Z", "legacy_named": false, "status": "active" },
-    "infra": { "persistent_name": "Infra", "universe": "descriptive", "created_at": "2026-10-03T09:07:58.155Z", "legacy_named": false, "status": "active" }
-  }
+    "lead": {
+      "persistent_name": "Lead",
+      "universe": "descriptive",
+      "created_at": "2026-10-03T09:07:58.155Z",
+      "legacy_named": false,
+      "status": "active",
+      "display_name": "Lead",
+      "role": "lead",
+      "updated_at": "2026-10-03T09:07:58.155Z"
+    },
+    "backend": {
+      "persistent_name": "Backend",
+      "universe": "descriptive",
+      "created_at": "2026-10-03T09:07:58.155Z",
+      "legacy_named": false,
+      "status": "active",
+      "display_name": "Backend",
+      "role": "backend",
+      "updated_at": "2026-10-03T09:07:58.155Z"
+    },
+    "frontend": {
+      "persistent_name": "Frontend",
+      "universe": "descriptive",
+      "created_at": "2026-10-03T09:07:58.155Z",
+      "legacy_named": false,
+      "status": "active",
+      "display_name": "Frontend",
+      "role": "frontend",
+      "updated_at": "2026-10-03T09:07:58.155Z"
+    },
+    "tester": {
+      "persistent_name": "Tester",
+      "universe": "descriptive",
+      "created_at": "2026-10-03T09:07:58.155Z",
+      "legacy_named": false,
+      "status": "active",
+      "display_name": "Tester",
+      "role": "tester",
+      "updated_at": "2026-10-03T09:07:58.155Z"
+    },
+    "infra": {
+      "persistent_name": "Infra",
+      "universe": "descriptive",
+      "created_at": "2026-10-03T09:07:58.155Z",
+      "legacy_named": false,
+      "status": "active",
+      "display_name": "Infra",
+      "role": "infra",
+      "updated_at": "2026-10-03T09:07:58.155Z"
+    }
+  },
+  "transaction_id": "6ad4a7e7-7342-4714-89ab-e7090a77ebdc"
 }

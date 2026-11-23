@@ -1,77 +1,34 @@
 name: Squad Release
+# dotnet project — configure build, test, and release commands below
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
 
 permissions:
-  id-token: write
   contents: write
 
-concurrency:
-  group: squad-release
-  cancel-in-progress: false
-
 jobs:
-  test:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@v4
         with:
-          dotnet-version: 10.0.x
-      - run: dotnet test Tilsynsvakt.slnx
+          fetch-depth: 0
 
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      AZURE__TENANTID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE__SUBSCRIPTIONID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZURE__LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE__RESOURCEGROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      Frontend__Origin: ${{ vars.FRONTEND_ORIGIN }}
-    steps:
-      - name: Validate required secrets
-        shell: bash
-        env:
-          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          ACCESS_PASSWORD: ${{ secrets.ACCESS_PASSWORD }}
+      - name: Build and test
         run: |
-          set -euo pipefail
-          for required in ADMIN_API_KEY ADMIN_USERNAME ADMIN_PASSWORD ACCESS_PASSWORD; do
-            if [[ -z "${!required}" ]]; then
-              echo "::error::Mangler obligatorisk hemmelighet: $required"
-              exit 1
-            fi
-          done
+          # TODO: Add your dotnet build/test commands here
+          # Go:            go test ./...
+          # Python:        pip install -r requirements.txt && pytest
+          # .NET:          dotnet test
+          # Java (Maven):  mvn test
+          # Java (Gradle): ./gradlew test
+          echo "No build commands configured — update squad-release.yml"
 
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-
-      # AZURE_CLIENT_ID is the user-assigned managed identity id-github-tilsynsvakt in rg-common.
-      - name: Azure login (OIDC, managed identity)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Install Aspire CLI
-        run: |
-          curl -sSL https://aspire.dev/install.sh | bash
-          echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
-
-      - name: Deploy
+      - name: Create release
         env:
-          Admin__ApiKey: ${{ secrets.ADMIN_API_KEY }}
-          Admin__Username: ${{ secrets.ADMIN_USERNAME }}
-          Admin__Password: ${{ secrets.ADMIN_PASSWORD }}
-          Access__Password: ${{ secrets.ACCESS_PASSWORD }}
-        run: aspire deploy --non-interactive
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # TODO: Add your release commands here (e.g., git tag, gh release create)
+          echo "No release commands configured — update squad-release.yml"
