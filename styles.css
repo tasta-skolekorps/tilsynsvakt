@@ -157,6 +157,25 @@ main { min-height: calc(100vh - 198px); padding: 22px 0 64px; }
 .schedule-detail strong { font-size: 15px; }
 .schedule-detail .muted { margin-top: 3px; font-size: 12px; }
 .schedule-status { color: var(--navy); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.day-picker { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; }
+.day-option {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px 2px;
+  color: var(--navy-deep);
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.day-name { font-size: 13px; font-weight: 800; text-transform: capitalize; }
+.day-date { font-size: 11px; font-variant-numeric: tabular-nums; }
+.day-today .day-name { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.day-option[aria-pressed="true"] { color: var(--navy-deep); background: var(--sun); }
+.day-option:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
 .empty-state, .loading { padding: 16px 0; color: var(--muted); line-height: 1.5; }
 .handover-strip, .handover-panel {
   display: grid;
